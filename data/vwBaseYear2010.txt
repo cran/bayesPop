@@ -1,0 +1,6 @@
+"country_code"	"country"	"Initials"	"isSmall"	"ProjFirstYear"	"MigCode"
+218	"Ecuador"	"DG"	0	1950	0
+242	"Fiji"	"LN"	0	1950	0
+450	"Madagascar"	"DG"	0	1950	0
+458	"Malaysia"	"LN"	0	1950	0
+528	"Netherlands"	"TS"	0	1950	9
