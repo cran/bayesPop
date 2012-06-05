@@ -1,6 +1,22 @@
-0.2-2 (04/12/2013)
+2.0-2 (06/06/2012) - data reduced 2.0-1
+ 
+2.0-1 (06/05/2012)
 -----
-Datasets reduced to five countries.
+S3 object and S3 methods for plotting pyramids. The pyramid functions completly re-implemented.
+
+Trajectories pyramid can now show any number of years.
+
+An argument 'aggregation' added to get.pop.prediction.
+
+1.0-1 (05/17/2012)
+-----
+Aggregation added (function pop.aggregate).
+
+In addition to projection years, population pyramids can now show a past year.
+
+Option for including another year into the population pyramids (argument draw.past.year).
+
+0.2-2 (04/12/2013) - data reduced 0.2-1
 
 0.2-1 (04/12/2012)
 -----
