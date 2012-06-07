@@ -17,7 +17,7 @@ get.psr.denominator.startindex <- function() return(14)
 
 get.pop.trajectories <- function(pop.pred, country, sex=c('both', 'male', 'female'), age='all',
  									nr.traj=NULL, typical.trajectory=FALSE) {
-	traj.file <- file.path(pop.pred$output.dir, paste('totpop_country', country, '.rda', sep=''))
+	traj.file <- file.path(pop.pred$output.directory, paste('totpop_country', country, '.rda', sep=''))
 	quant <- hch <- age.idx <- traj <- traj.idx <-  NULL
 	load.traj <- is.null(nr.traj) || nr.traj > 0
 	if (!file.exists(traj.file)) 
@@ -160,6 +160,9 @@ get.pop.traj.quantiles <- function(quantile.array, pop.pred, country.index, coun
 		if (!is.null(trajectories)) {
 			cqp <- apply(trajectories, 1, 
 						quantile, al, na.rm = TRUE)
+		} else {
+			warning('Quantiles not found')
+			return(NULL)
 		}
 	}
 	return(cqp)
@@ -183,7 +186,7 @@ get.age.labels <- function(ages, collapsed=FALSE) {
 	return(result)
 }	
 
-pop.trajectories.plot.all <- function(pop.pred, 
+pop.trajectories.plotAll <- function(pop.pred, 
 									output.dir=file.path(getwd(), 'pop.trajectories'),
 									output.type="png", verbose=FALSE, ...) {
 	# plots pop trajectories for all countries
@@ -214,7 +217,7 @@ pop.trajectories.plot <- function(pop.pred, country, pi=c(80, 95),
 								  xlim=NULL, ylim=NULL, 
 								  xlab='Year', ylab='Population projection', main=NULL,
 								  dev.ncol=5, lwd=c(2,2,2,2,1), col=c('black', 'red', 'red', 'blue', 'gray'),
-								  show.legend=TRUE, ...
+								  show.legend=TRUE, ann=par('ann'), ...
 								  ) {
 	# lwd is a vector of 5 line widths for: 
 	#	1. observed data, 2. median, 3. quantiles, 4. half child variant, 5. trajectories
@@ -222,8 +225,14 @@ pop.trajectories.plot <- function(pop.pred, country, pi=c(80, 95),
 		stop('Argument "country" must be given.')
 	}
 	if(length(lwd) < 5) {
+		llwd <- length(lwd)
 		lwd <- rep(lwd, 5)
-		lwd[5] <- 1
+		lwd[(llwd+1):5] <- c(2,2,2,2,1)[(llwd+1):5]
+	}
+	if(length(col) < 5) {
+		lcol <- length(col)
+		col <- rep(col, 5)
+		col[(lcol+1):5] <- c('black', 'red', 'red', 'blue', 'gray')[(lcol+1):5]
 	}
 
 	country <- get.country.object(country, country.table=pop.pred$countries)
@@ -232,7 +241,7 @@ pop.trajectories.plot <- function(pop.pred, country, pi=c(80, 95),
 									half.child.variant=half.child.variant, nr.traj=nr.traj,
 									typical.trajectory=typical.trajectory,
 									xlim=xlim, ylim=ylim, xlab=xlab, ylab=ylab, main=main, lwd=lwd, col=col,
-									show.legend=show.legend, ...)
+									show.legend=show.legend, ann=ann, ...)
 	else {
 		all.ages <- pop.pred$ages
 		if(age=='all') age <- 1:20
@@ -244,6 +253,8 @@ pop.trajectories.plot <- function(pop.pred, country, pi=c(80, 95),
 		}
 		age.labels <- get.age.labels(pop.pred$ages)
 		cur.mgp <- par('mgp')
+		cur.oma <- par('oma')
+		cur.mar <- par('mar')
 		nplots <- length(age)
 		if (nplots < dev.ncol) {
         	ncols <- nplots
@@ -259,10 +270,10 @@ pop.trajectories.plot <- function(pop.pred, country, pi=c(80, 95),
 									half.child.variant=half.child.variant, nr.traj=nr.traj,
 									typical.trajectory=typical.trajectory,
 									xlim=xlim, ylim=ylim, xlab='', ylab='', main=age.labels[iage], cex.main=0.9, 
-									lwd=lwd, col=col, show.legend=show.legend, ...)
+									lwd=lwd, col=col, show.legend=show.legend, ann=ann, ...)
 		}
-		mtext(main, line = 0.5, outer = TRUE)
-		par(mgp=cur.mgp)
+		if(ann) mtext(main, line = 0.5, outer = TRUE)
+		par(mgp=cur.mgp, mar=cur.mar, oma=cur.oma)
 	}
 }
 
@@ -273,7 +284,7 @@ do.pop.trajectories.plot <- function(pop.pred, country, pi=c(80, 95),
 								  xlim=NULL, ylim=NULL, type='b', 
 								  xlab='Year', ylab='Population projection', main=NULL, 
 								  lwd=c(2,2,2,2,1), col=c('black', 'red', 'red', 'blue', 'gray'),
-								  show.legend=TRUE, ...
+								  show.legend=TRUE, ann=par('ann'), ...
 								  ) {
 
 	sex <- match.arg(sex)
@@ -284,6 +295,8 @@ do.pop.trajectories.plot <- function(pop.pred, country, pi=c(80, 95),
 		cqp[[i]] <- get.pop.traj.quantiles(trajectories$quantiles, pop.pred, country$index, country$code, 
 										trajectories=trajectories$trajectories, pi=pi[i], sex=sex, age=age)
 	pop.observed <- get.pop.observed(pop.pred, country$code, sex=sex, age=age)
+	obs.not.na <- !is.na(pop.observed)
+	pop.observed <- if(sum(obs.not.na)==0) pop.observed[length(pop.observed)] else pop.observed[obs.not.na]
 	x1 <- as.integer(names(pop.observed))
 	x2 <- as.numeric(dimnames(pop.pred$quantiles)[[3]])
 	y1 <- pop.observed
@@ -309,7 +322,7 @@ do.pop.trajectories.plot <- function(pop.pred, country, pi=c(80, 95),
 	}
 	# plot historical data: observed
 	plot(x1, y1, type=type, xlim=xlim, ylim=ylim, ylab=ylab, xlab=xlab, main=main, 
-			panel.first = grid(), lwd=lwd[1], col=col[1], ...)
+			panel.first = grid(), lwd=lwd[1], col=col[1], ann=ann, ...)
 	# plot trajectories
 	if(!is.null(trajectories$trajectories)) {
 		for (i in 1:length(trajectories$index)) {
@@ -329,10 +342,16 @@ do.pop.trajectories.plot <- function(pop.pred, country, pi=c(80, 95),
 			lines(x2, cqp[[i]][2,], type='l', col=col[3], lty=lty[i], lwd=lwd[3])
 		}
 	}
-	legend <- c('median', paste(pi, '% PI', sep=''), 'observed')
-	lty <- c(1, lty, 1)
-	lwds <- c(lwd[2], rep(lwd[3], length(pi)), lwd[1])
-	cols <- c(col[2], rep(col[3], length(pi)), col[1])
+	legend <- c('median', paste(pi, '% PI', sep=''))
+	lty <- c(1, lty)
+	lwds <- c(lwd[2], rep(lwd[3], length(pi)))
+	cols <- c(col[2], rep(col[3], length(pi)))
+	if(sum(obs.not.na)>0) {
+		legend <- c(legend, 'observed')
+		lty <- c(lty, 1)
+		lwds <- c(lwds, lwd[1])
+		cols <- c(cols, col[1])
+	}
 	if (half.child.variant && !is.null(trajectories$half.child)) {
 		lty <- c(lty, max(lty)+1)
 		llty <- length(lty)
@@ -342,7 +361,7 @@ do.pop.trajectories.plot <- function(pop.pred, country, pi=c(80, 95),
 		cols <- c(cols, col[4])
 		lwds <- c(lwds, lwd[4])
 	}
-	if(show.legend)
+	if(show.legend && ann)
 		legend('topleft', legend=legend, lty=lty, bty='n', col=cols, lwd=lwds)
 }
 
@@ -401,15 +420,315 @@ pop.trajectories.table <- function(pop.pred, country, pi=c(80, 95),
 	return(pred.table)
 }
 
-pop.pyramid.all <- function(pop.pred, year=NULL,
+
+"get.bPop.pyramid" <- function(data, ...) UseMethod("get.bPop.pyramid")
+
+get.bPop.pyramid.matrix <- function(data, ...) get.bPop.pyramid.data.frame(data, ...)
+
+get.bPop.pyramid.data.frame <- function(data, main.label=NULL, legend='observed', is.proportion=FALSE, ages=NULL, pop.max=NULL, 
+										LRmain=c('Male', 'Female'), LRcolnames = c('male', 'female'), CI=NULL, ...) {
+	if(is.null(colnames(data)) || any(!is.element(LRcolnames, colnames(data))))
+		stop('Data must contain columns called ', paste(LRcolnames, collapse=', '), '.')
+	if(!is.null(ages)) {
+		if(length(ages) != nrow(data)) stop ("If ages is given, its length must be equal to the number of rows of data.")
+		rownames(data) <- ages
+	}
+	if(is.na(is.proportion)) { # compute proportion
+		data <- data/sum(data)
+		is.proportion <- TRUE
+	}
+	if(is.null(pop.max)) pop.max <- max(data)
+	pyr <- list(data)
+	names(pyr) <- legend
+	if(!is.null(CI)) {
+		if(!is.list(CI))
+			stop('CI must be a list with an element per confidence interval, each of which is a list of high and low data frames.')
+		for(i in 1:length(CI)) {
+			if(!all(is.element(c('high', 'low'), names(CI[[i]]))))
+				stop('CI components must have elements high and low.')
+			if(any(!is.element(LRcolnames, colnames(CI[[i]]$high))) || any(!is.element(LRcolnames, colnames(CI[[i]]$low))))
+				stop('High and low CI must contain columns called ', paste(LRcolnames, collapse=', '), '.')
+			pop.max <- max(pyr$pop.max, CI[[i]]$high, CI[[i]]$low)
+		}
+
+	}
+	return(structure(list(
+				label = main.label, 
+				pyramid = pyr, CI = list(CI),
+				is.proportion = is.proportion,
+				pop.max=pop.max,
+				LRmain=LRmain,
+				LRcolnames = LRcolnames), class='bayesPop.pyramid'))
+}
+
+get.bPop.pyramid.list <- function(data, main.label=NULL, legend=NULL, CI=NULL, ...) {
+	if(is.null(legend)) legend <- names(data)
+	ldata <- length(data)
+	if(is.null(legend)) legend <- c('observed', rep('comparison', ldata-1))
+	if(!is.null(CI) && length(CI) < ldata) {
+		warning('CI must be the same length as data.')
+		CI <- c(CI, vector('list', ldata-length(CI)))
+	}
+	pyr <- get.bPop.pyramid(data[[1]], main.label=main.label, legend=legend[[1]], ...)
+	if(!is.null(data[[2]])) {
+		for(i in 2:length(data)) {
+			quant <- if(is.null(CI)) NULL else CI[[i]]
+			pyri <- get.bPop.pyramid(data[[i]], legend=legend[[i]], CI=quant, ...)
+			for(item in c('pyramid', 'CI'))
+				pyr[[item]] <- c(pyr[[item]], pyri[[item]])
+			pyr$pop.max <- max(pyr$pop.max, pyri$pop.max)
+		}
+	}
+	return(pyr)
+} 
+
+
+get.bPop.pyramid.bayesPop.prediction <- function(data, country, year=NULL, pi=c(80, 95), proportion=FALSE, age=1:21, 
+												nr.traj=0, sort.pi=TRUE, ...) {
+	pop.pred <- data
+	country <- get.country.object(country, country.table=pop.pred$countries)
+	if(is.null(country$code)) stop('Country not found in the prediction object.')
+	year.idx <- if(is.null(year)) 1 else sapply(year, get.prediction.year.index, pred=pop.pred)
+	lyears <- length(year.idx)
+	draw.projection <- rep(TRUE, lyears)
+	draw.projection[is.na(year.idx)] <- FALSE # if years not found in the prediction years, these are probably observed years
+	draw.observed <- any(!draw.projection)
+	pop.observed <- NULL
+	if(draw.observed) {
+		pop.observed <- get.pop.observed(pop.pred, country$code, sex='both')
+		year.idx[!draw.projection] <- sapply(year[!draw.projection], get.observed.year.index, pred=pop.pred)
+		if(all(is.na(year.idx))) stop('Unable to find data for year ', year)
+		if(any(is.na(year.idx))) warning('Unable to find data for year ', year[is.na(year.idx)])
+	}
+	ages.idx <- age[age <=  length(pop.pred$ages)]
+	lages <- length(ages.idx)
+	nquant <- length(pi)
+	if(!any(draw.projection) || !any(draw.projection & (year.idx>1))) nquant <- 0
+	if(nquant > 1 && sort.pi) pi<-sort(pi, decreasing=TRUE) # this is needed for drawing the largest intervals first (because of overlapping issues)
+	quantiles.table <- if(proportion) list(male=pop.pred$quantilesPropMage, female=pop.pred$quantilesPropFage)
+                       else list(male=pop.pred$quantilesMage, female=pop.pred$quantilesFage)
+    is.valid.pi <- if(proportion && nquant>0) is.saved.pi(pop.pred, pi)
+                   else rep(TRUE, nquant)
+	maxx<-0
+	age.labels <- get.age.labels(pop.pred$ages[ages.idx])
+	true.nquant <- sum(is.valid.pi)
+	pyr <- list()
+	pyr.ci <- list()
+	for(yi in 1:lyears) {
+		pyr[[yi]] <- data.frame(male=rep(NA, lages), female=rep(NA, lages), row.names=age.labels)
+		pyr.ci[[yi]] <- list()
+		if(!draw.projection[yi] || (draw.projection[yi] && year.idx[yi] == 1)) next
+		pyr.ci[[yi]] <- vector("list", length=true.nquant)
+		if(true.nquant > 0) {
+			names(pyr.ci[[yi]]) <- pi[is.valid.pi]
+			for(tpi in names(pyr.ci[[yi]])) 
+				pyr.ci[[yi]][[tpi]] <- list(low=data.frame(male=rep(NA, lages), female=rep(NA, lages), row.names=age.labels),
+										high=data.frame(male=rep(NA, lages), female=rep(NA, lages), row.names=age.labels))
+		}
+	}
+	for(sex in c('male', 'female')) {
+		dimt <- dim(quantiles.table[[sex]])
+		dimn <- dimnames(quantiles.table[[sex]])
+		for(iage in 1:lages) {
+			if(any(draw.projection)) {
+				table <- drop(quantiles.table[[sex]][,ages.idx[iage],,])
+				table <- array(table, dimt[c(1,3:4)], dimnames=c(list(NULL), dimn[3], dimn[4]))
+				med <- get.pop.traj.quantiles(table, pop.pred, country$index, country$code, 
+												q=0.5, sex=sex, age=ages.idx[iage])
+			}
+			if(any(!draw.projection)) observed.data <- get.pop.observed(pop.pred, country$code, sex=sex, age=iage)
+			for(yi in 1:lyears) {				
+				pyr[[yi]][iage,sex] <- if(draw.projection[yi]) med[year.idx[yi]] 
+											else observed.data[year.idx[yi]]/(if(proportion) pop.observed[year.idx[yi]] else 1)
+				if(is.na(pyr[[yi]][iage,sex])) pyr[[yi]][iage,sex] <- 0
+				maxx <- max(maxx, pyr[[yi]][iage,sex])
+			}
+			if (nquant == 0) next
+			for (i in 1:nquant) {
+				if (!is.valid.pi[i]) next
+				pi.name <- as.character(pi[i])
+				quant <- get.pop.traj.quantiles(table, 
+												pop.pred, country$index, country$code, 
+												pi=pi[i], sex=sex, age=ages.idx[iage])
+				for(yi in 1:lyears) {
+					if(draw.projection[yi] & (year.idx[yi] > 1)) {
+						pyr.ci[[yi]][[pi.name]]$low[iage,sex] <- quant[1,year.idx[yi]]
+						pyr.ci[[yi]][[pi.name]]$high[iage,sex] <- quant[2,year.idx[yi]]
+						maxx <- max(maxx, pyr.ci[[yi]][[pi.name]]$high[iage,sex], pyr.ci[[yi]][[pi.name]]$low[iage,sex])
+					}
+				}
+			}
+		}
+	}
+	trajs <- list()
+	male.trajectories <- female.trajectories <- NULL
+	if((is.null(nr.traj) || nr.traj > 0) && any(draw.projection & (year.idx > 1))) {
+		mtraj <- get.pop.trajectories.multiple.age(pop.pred, country$code, sex='male', 
+										age=ages.idx, nr.traj, proportion=proportion)
+		if(!is.null(dim(mtraj$trajectories))) {
+			ftraj <- get.pop.trajectories.multiple.age(pop.pred, country$code, sex='female', 
+										age=ages.idx, nr.traj, proportion=proportion)
+			for(yi in 1:lyears) {
+				if(!draw.projection[yi] || (year.idx[yi] == 1)) {
+					trajs[[yi]] <- list()
+					next
+				}
+				male.trajectories <- drop(mtraj$trajectories[,year.idx[yi],mtraj$index])
+				male.trajectories <- array(male.trajectories, c(dim(mtraj$trajectories)[1],length(mtraj$index)), 
+												dimnames=list(age.labels, NULL))
+				female.trajectories <- drop(ftraj$trajectories[,year.idx[yi],ftraj$index])
+				female.trajectories <- array(female.trajectories, c(dim(ftraj$trajectories)[1],length(ftraj$index)),
+												dimnames=list(age.labels, NULL))
+				if(!is.null(male.trajectories)) maxx <- max(maxx, male.trajectories, female.trajectories)
+				trajs[[yi]] <- list(male=male.trajectories, female=female.trajectories)
+			}
+		}
+	}
+	names(pyr)[1] <- if(draw.projection[1] && year.idx[1] > 1) 'median' else 'observed'
+	if(lyears > 1)
+		names(pyr)[2:lyears] <- sapply(lapply(ifelse(draw.projection[2:lyears], pop.pred$proj.years[year.idx[2:lyears]],  
+											as.integer(names(pop.observed)[year.idx[2:lyears]])), '+', c(-3, 2)), paste, collapse='-')
+	return(structure(list(
+				label = paste(country$name, ': ', paste((if(draw.projection[1]) pop.pred$proj.years[year.idx[1]] 
+										else as.integer(names(pop.observed)[year.idx[1]])) + c(-3, 2), collapse='-'), sep=''), 
+				pyramid = pyr, CI = pyr.ci,
+				trajectories = if(length(trajs) > 0) trajs else NULL,
+				is.proportion = proportion,
+				pop.max=maxx,
+				LRmain=c('Male', 'Female'),
+				LRcolnames = c('male', 'female')
+				), class='bayesPop.pyramid'))
+}
+
+
+plot.bayesPop.pyramid <- function(x, ...) {
+	if(is.null(x$trajectories))
+		pop.pyramid(x, ...)
+	else pop.trajectories.pyramid(x, ...)
+}
+
+"pop.pyramid" <- function(pop.object, ...) UseMethod("pop.pyramid")
+
+pop.pyramid.bayesPop.pyramid <- function(pop.object, main=NULL, show.legend=TRUE, 
+										pyr1.par=list(border='black', col=NA, density=NULL, height=0.9),
+										pyr2.par =list(border='plum1', col='plum1', density=20, height=0.2), 
+										col.pi = NULL, ann=par('ann'), axes=TRUE, grid=TRUE, 
+										cex.main=0.9, cex.sub=1, cex=1, cex.axis=1, ...) {
+	mgp <- par('mgp')
+	oma <- par('oma')
+	mar <- par('mar')
+	par(oma = c(0, 0, 2, 0), mgp=c(3,0.5,0))
+	par(mar=c(5, 4, 2, 4) + 0.1)
+	if((is.null(pop.object$pyramid) || length(pop.object$pyramid) == 0) && is.null(pop.object$CI)) 
+		stop('Nothing to be plotted. Either pyramid or CI must be given in pop.object.')
+	age.labels <- rownames(if(!is.null(pop.object$pyramid[[1]])) pop.object$pyramid[[1]] 
+						   else {if(!is.null(pop.object$pyramid[[2]])) pop.object$pyramid[[2]] else pop.object$CI[[1]][[1]]$low})
+	if(is.null(age.labels)) stop('Row names must be given to determine age labels.')
+	lages <- length(age.labels)
+	nquant <- length(pop.object$CI[[1]])
+	draw.past <- (length(pop.object$pyramid) > 1) && !is.null(pop.object$pyramid[[2]])
+	draw.median <- !is.null(pop.object$pyramid[[1]])
+	pyr1.par.default <- list(border='black', col=NA, density=NULL, height=0.9)
+	for(item in names(pyr1.par.default)) if(is.null(pyr1.par[[item]])) pyr1.par[[item]] <- pyr1.par.default[[item]]
+	pyr2.par.default <- list(border='violet', col='violet', density=20, height=0.3)
+	for(item in names(pyr2.par.default)) if(is.null(pyr2.par[[item]])) pyr2.par[[item]] <- pyr2.par.default[[item]]
+	pyr1.half.height <- pyr1.par[['height']]/2
+	pyr2.half.height <- pyr2.par[['height']]/2
+	pyr1q.half.height <- max(0.1, min(1, pyr1.half.height + pyr1.half.height/4))
+	pyr2q.half.height <- max(0.1, min(1, pyr2.half.height + pyr2.half.height/4))
+	cols <- lwd <- legend <- c()
+	quantiles <- pop.object$CI[[1]]
+	pyr1 <- pop.object$pyramid[[1]]
+	pyr2 <- if(draw.past) pop.object$pyramid[[2]] else NULL
+	with(pop.object, {
+		maxx <- pop.max	
+		proportion <- !is.null(is.proportion) && is.proportion
+		male <- LRcolnames[1]
+		female <- LRcolnames[2]
+		plot(c(-maxx, maxx), c(-0.5, lages-0.5), type='n', axes=FALSE, xlab = "", ylab = "", ann=ann)
+		if(ann) mtext(LRmain, at=c(-maxx/2, maxx/2), side=3, cex=cex.sub)
+		age.axis.at <- 0:(lages-1)
+		labels <- .get.xtick.labels.for.pyramid(maxx, proportion) 
+		xat <- c(-labels, labels[1:length(labels)])
+		if(axes) {
+			axis(1, at=xat, labels=c(labels, labels[1:length(labels)]), cex.axis=cex.axis)
+			axis(2, at=age.axis.at, labels=age.labels, las=2, cex.axis=cex.axis)
+			axis(4, at=age.axis.at, labels=age.labels, las=2, cex.axis=cex.axis)
+		}
+		if(grid) {#grid(length(labels))
+			gridxat <- xat[seq(1, length(xat), by=2)]
+			segments(gridxat, rep(-0.5-lages/25, length(gridxat)), gridxat, lages-1+lages/25, col="lightgray", lty = "dotted")
+			gridyat <- age.axis.at[seq(1, lages, by=2)]
+			segments(rep(-maxx-2*maxx/25, length(gridyat)), gridyat, rep(maxx+2*maxx/25, length(gridyat)), 
+						gridyat, col="lightgray", lty = "dotted")
+		}
+		if(nquant > 0) {
+			cols <- if(is.null(col.pi)) rainbow(max(nquant, 5), start=0.15)[1:nquant] else rep(col.pi, nquant)[1:nquant]
+			for(i in 1:nquant) {
+				rect(-quantiles[[i]]$high[,male], age.axis.at-pyr1q.half.height, 
+						-quantiles[[i]]$low[,male], age.axis.at+pyr1q.half.height, col=cols[i],
+						border= NA)
+				rect(quantiles[[i]]$low[,female], age.axis.at-pyr1q.half.height, 
+						quantiles[[i]]$high[,female], 
+				 		age.axis.at+pyr1q.half.height, col=cols[i], border=NA)
+			}
+			legend <- c(legend, paste(names(quantiles), '% PI', sep=''))
+			lwd <- c(lwd, rep(5, nquant))
+		}
+		if(draw.median) {
+			rect(-pyr1[,male], age.axis.at-pyr1.half.height, rep(0, lages), age.axis.at+pyr1.half.height,
+					col=pyr1.par$col, border=pyr1.par$border, density=pyr1.par$density)
+			segments(-pyr1[,male], age.axis.at-pyr1.half.height, -pyr1[,male], age.axis.at+pyr1.half.height, 
+					col=pyr1.par$border, lwd=3)
+			rect(rep(0, lages), age.axis.at-pyr1.half.height, pyr1[,female], age.axis.at+pyr1.half.height, #lwd=2,
+					col=pyr1.par$col, border=pyr1.par$border, density=pyr1.par$density)
+			segments(pyr1[,female], age.axis.at-pyr1.half.height, pyr1[,female], age.axis.at+pyr1.half.height, 
+					col=pyr1.par$border, lwd=3)
+			lwd <- c(3, lwd)
+			cols <- c(pyr1.par$border, cols)
+			legend <- c(names(pyramid)[1], legend)
+		}		
+		if(draw.past) {
+			rect(-pyr2[,male], age.axis.at-pyr2.half.height, rep(0, lages), age.axis.at+pyr2.half.height,
+					col=pyr2.par$col, border=pyr2.par$border, density=pyr2.par$density)
+			segments(-pyr2[,male], age.axis.at-pyr2.half.height, -pyr2[,male], age.axis.at+pyr2.half.height, 
+					col=pyr2.par$border, lwd=3)
+			rect(rep(0, lages), age.axis.at-pyr2.half.height, pyr2[,female], age.axis.at+pyr2.half.height,
+					col=pyr2.par$col, border=pyr2.par$border, density=pyr2.par$density)
+			segments(pyr2[,female], age.axis.at-pyr2.half.height, pyr2[,female], age.axis.at+pyr2.half.height, 
+					col=pyr2.par$border, lwd=3)
+			legend <- c(legend, names(pyramid)[2])
+    		cols <- c(cols, pyr2.par$border)
+    		lwd <- c(lwd, 3)
+		}
+		lines(c(0,0), c(age.axis.at[1]-pyr1.half.height, age.axis.at[length(age.axis.at)]+pyr1.half.height), col='black')	
+		if(show.legend && ann) legend('topright', legend=legend, bty='n', col=cols, lwd=lwd, cex=cex)
+		if(is.null(main)) main <- if(exists('label')) label else ""
+		if(ann) title(main, line=1, cex.main=cex.main)
+	})	
+	par(mgp=mgp, oma=oma, mar=mar)
+}
+
+pop.pyramid.bayesPop.prediction <- function(pop.object, country, year=NULL, pi=c(80, 95), proportion=FALSE,
+											age=1:21, plot=TRUE, ...) {
+	if (missing(country)) {
+		stop('Argument "country" must be given.')
+	}
+	data <- get.bPop.pyramid(pop.object, country, year=year, pi=pi, proportion=proportion, age=age)
+	if (plot) pop.pyramid(data, ...)
+	invisible(data)
+}
+
+pop.pyramidAll <- function(pop.pred, year=NULL,
 									output.dir=file.path(getwd(), 'pop.pyramid'),
 									output.type="png", verbose=FALSE, ...) {
-	# plots pyramid for all countries and all years given by 'year'
+	# plots pyramid for all countries
 	if(!file.exists(output.dir)) dir.create(output.dir, recursive=TRUE)
 	all.countries <- pop.pred$countries[,'name']
 	postfix <- output.type
 	if(output.type=='postscript') postfix <- 'ps'
-	if(is.null(year)) year <- pop.pred$present.year
+	if(is.null(year)) year <- list(pop.pred$present.year)
+	if(!is.list(year)) year <- list(year)
 	for (country in all.countries) {
 		country.obj <- get.country.object(country, country.table=pop.pred$countries)
 		if(verbose)
@@ -417,7 +736,7 @@ pop.pyramid.all <- function(pop.pred, year=NULL,
 
 		for(y in year) {
 			do.call(output.type, list(file.path(output.dir, 
-										paste('pyr', y, '_c', country.obj$code, '.', postfix, sep=''))))
+										paste('pyr', paste(y, collapse='_'), '_c', country.obj$code, '.', postfix, sep=''))))
 			pop.pyramid(pop.pred, country=country.obj$code, year=y, ...)
 			dev.off()
 		}
@@ -426,107 +745,125 @@ pop.pyramid.all <- function(pop.pred, year=NULL,
 		cat('\nPyramids stored into', output.dir, '\n')
 }
 
-pop.pyramid <- function(pop.pred, country, year=NULL, pi=c(80, 95), proportion=FALSE,
-							main=NULL, age=1:21) {
+
+"pop.trajectories.pyramid" <- function(pop.object, ...) UseMethod("pop.trajectories.pyramid")
+
+pop.trajectories.pyramid.bayesPop.prediction <- function(pop.object, country, year=NULL, pi=c(80, 95), 
+					nr.traj=NULL, proportion=FALSE, age=1:21, plot=TRUE, ...) {
 	if (missing(country)) {
 		stop('Argument "country" must be given.')
 	}
-	country <- get.country.object(country, country.table=pop.pred$countries)
-	year.idx <- if(is.null(year)) 1 else get.prediction.year.index(pop.pred, year)
-	ages.idx <- age
-	ages <- pop.pred$ages[ages.idx]
-	lages <- length(ages)
-	age.labels <- get.age.labels(pop.pred$ages[ages.idx])
-	npred <- length(pop.pred$proj.years)
-	pop.median <- list(male=rep(NA, lages), female=rep(NA, lages))
-	pop.quant <- list(male=list(), female=list())
-	nquant <- length(pi)
-	if(nquant > 1) pi<-sort(pi, decreasing=TRUE)
-	quantiles.table <- if(proportion) list(male=pop.pred$quantilesPropMage, female=pop.pred$quantilesPropFage)
-                       else list(male=pop.pred$quantilesMage, female=pop.pred$quantilesFage)
-    is.valid.pi <- if(proportion) is.saved.pi(pop.pred, pi)
-                   else rep(TRUE, nquant)
-	maxx<-0
-	for(sex in c('male', 'female')) {
-		for(iage in 1:lages) {
-			dimt <- dim(quantiles.table[[sex]])
-			dimn <- dimnames(quantiles.table[[sex]])
-			table <- drop(quantiles.table[[sex]][,ages.idx[iage],,])
-			table <- array(table, dimt[c(1,3:4)], dimnames=c(list(NULL), dimn[3], dimn[4]))
-			med <- get.pop.traj.quantiles(table, pop.pred, country$index, country$code, 
-												q=0.5, sex=sex, age=ages.idx[iage])
-			pop.median[[sex]][iage] <- med[year.idx]
-			maxx <- max(maxx, pop.median[[sex]][iage])
-			if (nquant == 0) next
-			for (i in 1:nquant) {
-				if (!is.valid.pi[i]) {
-					pop.quant[[sex]][[i]] <- NA
-					next
-				}
-				quant <- get.pop.traj.quantiles(table, 
-												pop.pred, country$index, country$code, 
-												pi=pi[i], sex=sex, age=ages.idx[iage])
-				if(length(pop.quant[[sex]]) < i) 
-					pop.quant[[sex]][[i]] <- array(NA, c(2, lages))
-				pop.quant[[sex]][[i]][,iage] <- quant[,year.idx]
-				maxx <- max(maxx, pop.quant[[sex]][[i]][1:2,iage])
-			}
-		}
-	}
+	data <- get.bPop.pyramid(pop.object, country, year=year, pi=pi, nr.traj=nr.traj, proportion=proportion, 
+							age=age, sort.pi=FALSE)
+	if(plot) pop.trajectories.pyramid(data, ...)
+	invisible(data)
+}
+
+pop.trajectories.pyramid.bayesPop.pyramid  <- function(pop.object, main=NULL, show.legend=TRUE, 
+													col=rainbow, col.traj='grey',
+													lwd=2, ann=par('ann'), axes=TRUE, grid=TRUE, 
+													cex.main=0.9, cex.sub=1, cex=1, cex.axis=1, ...) {
+	# col/lwd is color and line width for:
+	# 1. median, 2. quantiles, 3. past data, 4. trajectories
 	mgp <- par('mgp')
 	oma <- par('oma')
 	mar <- par('mar')
-	par(mfrow=c(1,2),  oma = c(0, 0, 2, 0))
-	par(mar=c(5,6,2,-0.1)+0.1, mgp=c(3,0.5,0))
-	plot(c(-1,0), c(0, lages), type='n', axes=FALSE, xlab = "", ylab = "", main='Male', first.panel=grid(),
-			cex.main=0.9)
-	cols <- rainbow(max(nquant, 5), start=0.15)[1:nquant]
-	if(nquant > 0) {
-		for(i in 1:nquant) {
-			if(!is.valid.pi[i]) next
-			rect(-pop.quant[['male']][[i]][2,]/maxx, (1:lages)-0.45, 
-				-pop.quant[['male']][[i]][1,]/maxx, (1:lages)+0.45, col=cols[i],
-				border= NA)
+	#par(mfrow=c(1,2),  mar=c(5,6,2,-0.1)+0.1)
+	par(oma = c(0, 0, 2, 0), mgp=c(3,0.5,0))
+	par(mar=c(5, 4, 2, 4) + 0.1)
+	if((is.null(pop.object$pyramid) || length(pop.object$pyramid) == 0) && is.null(pop.object$CI) && is.null(pop.object$trajectories))
+		stop('Nothing to be plotted. Either pyramid, CI or trajectories must be given in pop.object.')
+	pyr.indicator <- !sapply(pop.object$pyramid, is.null)
+	lpyr <- length(pyr.indicator)
+	ci.indicator <- if(is.null(pop.object$CI)) rep(FALSE, lpyr) 
+						else sapply(pop.object$CI, function(x) return(length(x)>0))
+	traj.indicator <- if(is.null(pop.object$trajectories)) rep(FALSE, lpyr) 
+						else sapply(pop.object$trajectories, function(x) return(length(x)>0))
+	age.labels <- rownames(if(any(pyr.indicator)) pop.object$pyramid[[which(pyr.indicator)[1]]]
+						   else {if(any(ci.indicator)) pop.object$CI[[which(ci.indicator)[1]]]$low else {
+						   			if(any(traj.indicator)) pop.object$trajectories[[which(traj.indicator)[1]]]$male else NULL}})
+	if(is.null(age.labels)) stop('Row names must be given to determine age labels.')
+	lages <- length(age.labels)
+	if(length(lwd) < lpyr) {
+		lwd <- rep(lwd, lpyr)
+		lwd <- lwd[1:lpyr]
+	}
+	if(is.function(col)) col <- do.call(col, list(lpyr))
+	else {
+		if(length(col) < lpyr) {
+			col <- rep(col, lpyr)
+			col <- col[1:lpyr]
 		}
 	}
-	rect(-pop.median[['male']]/maxx, (1:lages)-0.45, rep(0, lages), (1:lages)+0.45, #lwd=2,
-			border='black')
-	for (i in 1:lages)
-		lines(rep(-pop.median[['male']][i]/maxx, 2), c(i-0.45, i+0.45), lwd=3)
+	if(length(col.traj) < lpyr) {
+		col.traj <- rep(col.traj, lpyr)
+		col.traj <- col.traj[1:lpyr]
+	}
+	legend <- lty <- cols <- lwds <- ltys <- c()
+	maxx <- pop.object$pop.max
+	proportion <- !is.null(pop.object$is.proportion) && pop.object$is.proportion
+	labels <- .get.xtick.labels.for.pyramid(maxx, proportion)
+	age.axis.at <- 0:(lages-1)
+	plot(c(-maxx,maxx), c(0, lages-0.5), type='n', axes=FALSE, xlab = "", ylab = "", ann=ann)
+	if(ann) mtext(pop.object$LRmain, at=c(-maxx/2, maxx/2), side=3, cex=cex.sub)
+	xat <- c(-labels, labels[1:length(labels)])
+	if(axes) {
+		axis(1, at=xat, labels=c(labels, labels[1:length(labels)]), cex.axis=cex.axis)
+		axis(2, at=age.axis.at, labels=age.labels, las=2, cex.axis=cex.axis)
+		axis(4, at=age.axis.at, labels=age.labels, las=2, cex.axis=cex.axis)
+	}
+	if(grid) {#grid(length(labels))
+		gridxat <- xat[seq(1, length(xat), by=2)]
+		segments(gridxat, rep(-0.5-lages/25, length(gridxat)), gridxat, lages-1+lages/25, col="lightgray", lty = "dotted")
+		gridyat <- age.axis.at[seq(1, lages, by=2)]
+		segments(rep(-maxx-2*maxx/25, length(gridyat)), gridyat, rep(maxx+2*maxx/25, length(gridyat)), 
+						gridyat, col="lightgray", lty = "dotted")
+	}
+	lines(c(0,0), c(-lages/25, lages))
 
-	labels <- if(proportion) round(seq(maxx, 0, length=11),2) else round(signif(seq(maxx, 0, length=11),2))
-	axis(1, at=-labels/maxx, labels=labels)
-	axis(2, at=1:lages, labels=age.labels, las=2)
-	par(mar=c(5,-0.1,2,6)+0.1)
-	plot(c(0,1), c(0, lages), type='n', axes=FALSE, xlab = "", ylab = "", main='Female', first.panel=grid(),
-			cex.main=0.9)
-	if(nquant > 0) {
-		for(i in 1:nquant) {
-			if(!is.valid.pi[i]) next
-			rect(pop.quant[['female']][[i]][1,]/maxx, (1:lages)-0.45, 
-				pop.quant[['female']][[i]][2,]/maxx, 
-				 (1:lages)+0.45, col=cols[i], border=NA)
+	with(pop.object, {
+		for(ipyr in 1:length(pyr.indicator)) {
+			nquant <- if (ci.indicator[ipyr]) length(CI[[ipyr]]) else 0
+			draw.median <- pyr.indicator[ipyr]
+			draw.traj <- traj.indicator[ipyr]
+			male <- LRcolnames[1]
+			female <- LRcolnames[2]
+			nr.traj <- if(draw.traj) ncol(pop.object$trajectories[[ipyr]][[male]]) else 0				
+			if(draw.traj) 
+				for(i in 1:nr.traj) {
+					lines(-trajectories[[ipyr]][[male]][,i], age.axis.at, col=col.traj[ipyr], lwd=1)
+					lines(trajectories[[ipyr]][[female]][,i], age.axis.at, col=col.traj[ipyr], lwd=1)
+				}
+			if(draw.median) {
+				lines(-pyramid[[ipyr]][,male], age.axis.at, col=col[ipyr], lwd=lwd[ipyr])
+				lines(pyramid[[ipyr]][,female], age.axis.at, col=col[ipyr], lwd=lwd[ipyr])
+				cols <- c(cols, col[ipyr])
+				lwds <- c(lwds, lwd[ipyr])
+				ltys <- c(ltys, 1)
+				legend <- c(legend, names(pyramid)[ipyr])
+			}
+			if(nquant > 0) {
+				lty <- 2:(nquant+1)
+				for(i in 1:nquant) {
+					lines(-CI[[ipyr]][[i]]$low[,male], age.axis.at, col=col[ipyr], lwd=lwd[ipyr], lty=lty[i])
+					lines(-CI[[ipyr]][[i]]$high[,male], age.axis.at, col=col[ipyr], lwd=lwd[ipyr], lty=lty[i])
+					lines(CI[[ipyr]][[i]]$low[,female], age.axis.at, col=col[ipyr], lwd=lwd[ipyr], lty=lty[i])
+					lines(CI[[ipyr]][[i]]$high[,female], age.axis.at, col=col[ipyr], lwd=lwd[ipyr], lty=lty[i])
+				}
+				cols <- c(cols, rep(col[ipyr], nquant))
+				lwds <- c(lwds, rep(lwd[ipyr], nquant))
+				legend <- c(legend, paste(names(CI[[ipyr]]), '% PI', sep=''))
+				ltys <- c(ltys, lty)
+			}
 		}
-	}
-	rect(rep(0, lages), (1:lages)-0.45, pop.median[['female']]/maxx, (1:lages)+0.45, #lwd=2,
-			border='black')
-	for (i in 1:lages)
-		lines(rep(pop.median[['female']][i]/maxx, 2), c(i-0.45, i+0.45), lwd=3)
-	
-	labels <- if(proportion) round(seq(0, maxx, length=11),2) else round(signif(seq(0, maxx, length=11),2))
-	axis(1, at=labels/maxx, labels=labels)
-	axis(4, at=1:lages, labels=age.labels, las=2)
-	legend <- c('median')
-    if (any(is.valid.pi)) legend <- c(legend, paste('PI', pi[is.valid.pi]))
-	legend('topright', legend=legend, bty='n', 
-			col=c('black', cols[is.valid.pi]), lwd=c(3, rep(5, sum(is.valid.pi))))
-	if(is.null(main)) 
-		main <- paste(country$name, ': ', pop.pred$proj.years[year.idx], sep='')
-	mtext(main, line = 0.5, outer = TRUE)
+		if(is.null(main)) main <- if(exists("label")) label else ""
+		if(ann) title(main, cex.main=cex.main, line=1)	
+		if(show.legend && ann) legend('topright', legend=legend, lty=ltys, bty='n', col=cols, lwd=lwds, cex=cex)
+	})
 	par(mgp=mgp, oma=oma, mar=mar)
 }
 
-pop.trajectories.pyramid.all <- function(pop.pred, year=NULL,
+pop.trajectories.pyramidAll <- function(pop.pred, year=NULL,
 									output.dir=file.path(getwd(), 'pop.traj.pyramid'),
 									output.type="png", verbose=FALSE, ...) {
 	# plots pyramid for all countries and all years given by 'year'
@@ -534,7 +871,8 @@ pop.trajectories.pyramid.all <- function(pop.pred, year=NULL,
 	all.countries <- pop.pred$countries[,'name']
 	postfix <- output.type
 	if(output.type=='postscript') postfix <- 'ps'
-	if(is.null(year)) year <- pop.pred$present.year
+	if(is.null(year)) year <- list(pop.pred$present.year)
+	if(!is.list(year)) year <- list(year)
 	for (country in all.countries) {
 		country.obj <- get.country.object(country, country.table=pop.pred$countries)
 		if(verbose)
@@ -542,7 +880,7 @@ pop.trajectories.pyramid.all <- function(pop.pred, year=NULL,
 
 		for(y in year) {
 			do.call(output.type, list(file.path(output.dir, 
-										paste('pyr', y, '_c', country.obj$code, '.', postfix, sep=''))))
+										paste('pyr', paste(y, collapse='_'), '_c', country.obj$code, '.', postfix, sep=''))))
 			pop.trajectories.pyramid(pop.pred, country=country.obj$code, year=y, ...)
 			dev.off()
 		}
@@ -551,128 +889,35 @@ pop.trajectories.pyramid.all <- function(pop.pred, year=NULL,
 		cat('\nTrajectory pyramids stored into', output.dir, '\n')
 }
 
-
-pop.trajectories.pyramid <- function(pop.pred, country, year=NULL, pi=c(80, 95), 
-								  nr.traj=NULL, proportion=FALSE, main=NULL, age=1:21) {
-	if (missing(country)) {
-		stop('Argument "country" must be given.')
-	}
-	country <- get.country.object(country, country.table=pop.pred$countries)
-	ages.idx <- age
-	ages <- pop.pred$ages[ages.idx]
-	lages <- length(ages)
-	age.labels <- get.age.labels(pop.pred$ages[ages.idx])
-	year.idx <- if(is.null(year)) 1 else get.prediction.year.index(pop.pred, year)
-	male.trajectories <- female.trajectories <- NULL
-	maxx<-0
-	mtraj <- get.pop.trajectories.multiple.age(pop.pred, country$code, sex='male', 
-										age=ages.idx, nr.traj, proportion=proportion)
-	if(!is.null(mtraj$trajectories)) {
-		male.trajectories <- drop(mtraj$trajectories[,year.idx,mtraj$index])
-		male.trajectories <- array(male.trajectories, c(dim(mtraj$trajectories)[1],length(mtraj$index)))
-		ftraj <- get.pop.trajectories.multiple.age(pop.pred, country$code, sex='female', 
-										age=ages.idx, nr.traj, proportion=proportion)
-		female.trajectories <- drop(ftraj$trajectories[,year.idx,ftraj$index])
-		female.trajectories <- array(female.trajectories, c(dim(ftraj$trajectories)[1],length(ftraj$index)))
-	}
-	if(!is.null(male.trajectories)) maxx <- max(maxx, male.trajectories, female.trajectories)
-
-
-	npred <- length(pop.pred$proj.years)
-	nquant <- length(pi)
-	pop.median <- list(male=rep(NA, lages), female=rep(NA, lages))
-	pop.quant <- list(male=list(), female=list())
-	quantiles.table <- if(proportion) list(male=pop.pred$quantilesPropMage, female=pop.pred$quantilesPropFage)
-						else list(male=pop.pred$quantilesMage, female=pop.pred$quantilesFage)
+.get.year.index <- function(year, years) {
+	lyears <- length(years)
+	res <- as.integer(cut(year, labels=1:lyears, breaks=c(years-3, years[lyears]+2)))
+	return(res)
 	
-	is.valid.pi <- if(proportion) is.saved.pi(pop.pred, pi)
-					else rep(TRUE, nquant)
-	for(sex in c('male', 'female')) {
-		for(iage in 1:lages) {
-			dimt <- dim(quantiles.table[[sex]])
-			dimn <- dimnames(quantiles.table[[sex]])
-			table <- drop(quantiles.table[[sex]][,ages.idx[iage],,])
-			table <- array(table, dimt[c(1,3:4)], dimnames=c(list(NULL), dimn[3], dimn[4]))
-			med <- get.pop.traj.quantiles(table, pop.pred, country$index, country$code, 
-												q=0.5, sex=sex, age=ages.idx[iage])
-			pop.median[[sex]][iage] <- med[year.idx]
-			maxx <- max(maxx, pop.median[[sex]][iage])
-			if (nquant == 0) next
-			for (i in 1:nquant) {
-				if (!is.valid.pi[i]) {
-					pop.quant[[sex]][[i]] <- NA
-					next
-				}
-				quant <- get.pop.traj.quantiles(table, pop.pred, country$index, country$code, 
-									pi=pi[i], sex=sex, age=ages.idx[iage], reload=!proportion)
-				if(length(pop.quant[[sex]]) < i) 
-					pop.quant[[sex]][[i]] <- array(NA, c(2, lages))
-				pop.quant[[sex]][[i]][,iage] <- quant[,year.idx]
-				maxx <- max(maxx, pop.quant[[sex]][[i]][1:2,iage])
-			}
-		}
-	}
-	mgp <- par('mgp')
-	oma <- par('oma')
-	mar <- par('mar')
-	par(mfrow=c(1,2),  oma = c(0, 0, 2, 0))
-	par(mar=c(5,6,2,-0.1)+0.1, mgp=c(3,0.5,0))
-	#stop('')
-	plot(c(-1,0), c(0, lages), type='n', axes=FALSE, xlab = "", ylab = "", main='Male', first.panel=grid(),
-			cex.main=0.9)
-	if(!is.null(male.trajectories)) {
-		for(i in 1:dim(male.trajectories)[2]) {
-			lines(-male.trajectories[,i]/maxx, 1:lages, col='grey')
-		}
-	}
-	lines(-pop.median[['male']]/maxx, 1:lages, col='red')
-	lty <- 2:(nquant+1)
-	if(nquant > 0) {
-		for(i in 1:nquant) {
-			if(!is.valid.pi[i]) next
-			lines(-pop.quant[['male']][[i]][1,]/maxx, 1:lages, col='red', lty=lty[i])
-			lines(-pop.quant[['male']][[i]][2,]/maxx, 1:lages, col='red', lty=lty[i])
-		}
-	}
-	labels <- if(proportion) round(seq(maxx, 0, length=11),2) else round(signif(seq(maxx, 0, length=11),2))
-	axis(1, at=-labels/maxx, labels=labels)
-	axis(2, at=1:lages, labels=age.labels, las=2)
-	abline(v=0)
-	par(mar=c(5,-0.1,2,6)+0.1)
-	plot(c(0,1), c(0, lages), type='n', axes=FALSE, xlab = "", ylab = "", main='Female', first.panel=grid(),
-			cex.main=0.9)
-	if(!is.null(female.trajectories)) {
-		for(i in 1:dim(female.trajectories)[2]) {
-			lines(female.trajectories[,i]/maxx, 1:lages, col='grey')
-		}
-	}
-	lines(pop.median[['female']]/maxx, 1:lages, col='red')
-	if(nquant > 0) {
-		for(i in 1:nquant) {
-			if(!is.valid.pi[i]) next
-			lines(pop.quant[['female']][[i]][1,]/maxx, 1:lages, col='red', lty=lty[i])
-			lines(pop.quant[['female']][[i]][2,]/maxx, 1:lages, col='red', lty=lty[i])
-		}
-	}
-	labels <- if(proportion) round(seq(0, maxx, length=11),2) else round(signif(seq(0, maxx, length=11),2))
-	axis(1, at=labels/maxx, labels=labels)
-	axis(4, at=1:lages, labels=age.labels, las=2)
-	abline(v=0)
-	if(is.null(main)) 
-		main <- paste(country$name, ': ', pop.pred$proj.years[year.idx], sep='')
-	mtext(main, line = 0.5, outer = TRUE)
-	legend <- c('median')
-	if (any(is.valid.pi)) legend <- c(legend, paste('PI', pi[is.valid.pi]))
-	col <- rep('red', sum(is.valid.pi)+1)
-	legend('topright', legend=legend, lty=c(1,lty[is.valid.pi]), bty='n', col=col)
-	par(mgp=mgp, oma=oma, mar=mar)
+	#breaks <- c(years-3, years[lyears]+2)
+	#h <- try(hist(year, breaks=breaks, plot=FALSE)$count, silent=TRUE)
+	#return(if(inherits(h, "try-error")) NULL else which(h > 0)[1])
 }
-
-
 get.prediction.year.index <- function(pred, year) {
 	years <- pred$proj.years
-	lyears <- length(years)
-	breaks <- c(years-3, years[lyears]+2)
-	h <- try(hist(year, breaks=breaks, plot=FALSE)$count, silent=TRUE)
-	return(if(inherits(h, "try-error")) NULL else which(h > 0)[1])
+	return(.get.year.index(year, years))
+}
+
+get.observed.year.index <- function(pred, year) {
+	years <- as.integer(colnames(pred$inputs$pop.matrix[['male']]))
+	return(.get.year.index(year, years))
+}
+
+.get.xtick.labels.for.pyramid <- function(maxx, proportion){
+	if(proportion) {
+		rmaxx <- round(maxx*100)
+		nticks <- min(rmaxx+1,11)
+		dec <- 2
+		if(rmaxx <= 5) {
+			nticks <- 2*rmaxx + 1
+			dec <- 3
+		}
+		return(round(seq(0, maxx, length=nticks), dec))
+	}
+	return(round(signif(seq(0, maxx, length=min(11,maxx)),2)))
 }
