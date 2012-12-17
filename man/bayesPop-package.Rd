@@ -12,8 +12,8 @@ The package allows to generate population projections for all countries of the w
 \tabular{ll}{
 Package: \tab bayesPop\cr
 Type: \tab Package\cr
-Version: \tab 2.0-2\cr
-Date: \tab 2012-06-05\cr
+Version: \tab 3.1-8\cr
+Date: \tab 2012-12-16\cr
 License: \tab GPL (>=2)\cr
 URL: \tab \url{http://bayespop.csss.washington.edu}\cr 
 }
@@ -27,14 +27,17 @@ Hana Sevcikova, Adrian Raftery
 
 Maintainer: Hana Sevcikova <hanas@uw.edu>
 }
-%\references{
-%}
+\references{
+A. E. Raftery,  N. Li, H. Sevcikova , P. Gerland, G. K. Heilig (2012). Bayesian probabilistic population projections for all countries. Proceedings of the National Academy of Sciences 109:13915-13921.
+}
+
 
 \keyword{ package }
 \seealso{
 \code{\link[bayesTFR:bayesTFR-package]{bayesTFR}}, \code{\link[bayesLife:bayesLife-package]{bayesLife}}
 }
 \examples{
+\dontrun{
 sim.dir <- tempfile()
 # Generates population projection for one country
 country <- 'Netherlands'
@@ -44,6 +47,7 @@ pop.trajectories.plot(pred, country)
 pop.pyramid(pred, country)
 pop.pyramid(pred, country, year=2100, age=1:26)
 unlink(sim.dir, recursive=TRUE)
+}
 
 # Here are commands needed to run probabilistic projections
 # from scratch, i.e. including TFR and life expectancy.
@@ -75,3 +79,5 @@ pop.trajectories.plot(pred, 'Madagascar', nr.traj=50, sum.over.ages=TRUE)
 pop.trajectories.table(pred, 'Madagascar')
 }
 }
+% reproducing example data in the package:
+% pred <- pop.predict(countries=c(528,218), nr.traj=5, output.dir=sim.dir)
