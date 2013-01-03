@@ -1,6 +1,10 @@
 Odd version numbers refer to versions containing full (confidential) UN data.
 Even version numbers refer to versions containing reduced (public) UN data. 
 ===================================================
+3.1-9/10 (1/3/2013)
+-----
+.First.lib and .Last.lib changed to .onLoad and .onUnload
+
 3.1-7/8 (12/16/2012)
 -----
 Registred global object LOCATIONS (using utils::globalVariables()).
@@ -45,12 +49,7 @@ Storing vital events possible via pop.predict (argument keep.vital.events).
 
 Implemented a function for writing a summary file for any population measure and stored vital events (write.pop.projection.summary).
 
-<<<<<<< HEAD
-2.0-2 (06/06/2012) - data reduced 2.0-1
-2.0-1 (06/05/2012)
-=======
 2.0-1/2 (06/05/2012)
->>>>>>> master
 -----
 S3 object and S3 methods for plotting pyramids. The pyramid functions completly re-implemented.
 
@@ -66,14 +65,7 @@ In addition to projection years, population pyramids can now show a past year.
 
 Option for including another year into the population pyramids (argument draw.past.year).
 
-<<<<<<< HEAD
-0.2-2 (04/12/2013) - data reduced 0.2-1
-
-0.2-1 (04/12/2012)
-=======
-
 0.2-1/2 (04/12/2012)
->>>>>>> master
 -----
 Integrated outputs from joint female-male life expectancy.
 

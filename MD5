@@ -1,11 +1,11 @@
-7de724801daaec339a0d325fffc25d89 *ChangeLog
-56bacb0bf7194d627aea43e652107a8a *DESCRIPTION
+7f110f1eb4c486d69b8e7fde74037cfd *ChangeLog
+2e944333c6e035756ec2f8de16017091 *DESCRIPTION
 a0a6e941f58e8fd69ab5d9c0a90163f9 *NAMESPACE
 5ac5596276ab7debaa7fe953c8e0a649 *R/aggregate.R
-e2cd7ef77c2bd9c66985842d5e036d22 *R/get_outputs.R
+1e1b54a9b8c110babe87869c6e94b39c *R/get_outputs.R
 0218bdec32ad9abb62ea4db7a12e9346 *R/plot_functions.R
 58bb6c75d8f798311b76e06b8b62740c *R/predict.pop.R
-fc3eb2f31cf420053769b4f1d6fc8b36 *R/zzz.R
+c6b64cabd43bf8bf7e58440de32c23f2 *R/zzz.R
 636e29f886ee339da6d01ada7b9ecb4d *data/ASMRFemale2008.R
 fcc29ce64d3f85404fd50e7d8a23fcb3 *data/ASMRFemale2008.txt
 445d0800329ae1589878870b4f0478d3 *data/ASMRFemale2010.R
@@ -58,7 +58,7 @@ a166cafb28dbe8a3b434f2b0cebb98dd *man/PercentASFR.Rd
 dd81d085621484829037615105b6ba19 *man/PopByAge.Rd
 6778dc6477025310a8cb21488c31a6db *man/SexRatioAtBirth.Rd
 a662383d12fdfc28fb75e0759b3ac8bb *man/bayesPop-internal.Rd
-4aa696d3a741b3e76919d24633ae9cd9 *man/bayesPop-package.Rd
+5ef8b8c9ffc9068fddf8884f57e07c1a *man/bayesPop-package.Rd
 108136f5de1d9e09dd89e2681cf46990 *man/expressions.Rd
 bcef91ea9cb05019b72a55b6dd8c8e44 *man/get.countries.table.Rd
 5c14ccfea78e7bd2eccfea5b6ed1cd5d *man/get.pop.prediction.Rd
