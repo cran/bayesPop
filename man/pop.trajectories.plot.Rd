@@ -16,7 +16,6 @@ The functions plot and tabulate the distribution of population projection for a 
 pop.trajectories.plot(pop.pred, country = NULL, expression = NULL, pi = c(80, 95), 
     sex = c("both", "male", "female"), age = "all", sum.over.ages = FALSE, 
     half.child.variant = FALSE, nr.traj = NULL, typical.trajectory = FALSE,
-    xlim = NULL, ylim = NULL, xlab = "Year", ylab = "Population projection", 
     main = NULL, dev.ncol = 5, lwd = c(2, 2, 2, 2, 1), 
     col = c('black', 'red', 'red', 'blue', 'gray'), show.legend = TRUE, 
     ann = par('ann'), \dots)
@@ -31,7 +30,7 @@ pop.trajectories.table(pop.pred, country = NULL, expression = NULL, pi = c(80, 9
 pop.byage.plot(pop.pred, country = NULL, year = NULL, expression = NULL, 
     pi = c(80, 95), sex = c('both', 'male', 'female'), 
     half.child.variant = FALSE, nr.traj = NULL, typical.trajectory=FALSE,
-    xlim = NULL, ylim = NULL, xlab = 'Age', ylab = 'Population projection', 
+    xlim = NULL, ylim = NULL, xlab = '', ylab = 'Population projection', 
     main = NULL, lwd = c(2,2,2,1), col = c('red', 'red', 'blue', 'gray'),
     show.legend = TRUE, add = FALSE, ann = par('ann'), \dots)
     
@@ -82,7 +81,7 @@ Hana Sevcikova
 \code{\link{bayesPop.prediction}}, \code{\link{summary.bayesPop.prediction}}, \code{\link{pop.pyramid}}
 }
 \examples{
-sim.dir <- file.path(.find.package("bayesPop"), "ex-data", "Pop")
+sim.dir <- file.path(find.package("bayesPop"), "ex-data", "Pop")
 pred <- get.pop.prediction(sim.dir)
 pop.trajectories.plot(pred, country="Ecuador", pi=c(80, 95))
 pop.trajectories.table(pred, country="Ecuador", pi=c(80, 95))
