@@ -8,12 +8,30 @@ The functions above accept an argument \code{expression} which should define a p
 
 A \bold{basic component} is a character string constituted of four parts, two of which are optional. They must be in the following order:
 \enumerate{
-\item Measure identification: One of the folowing five upper-case characters - \sQuote{P} (population), \sQuote{D} (deaths), \sQuote{B} (births), \sQuote{S} (survival rate), \sQuote{F} (fertility rate).
-\item Country part: Numerical country code (as used in {\code{\link{LOCATIONS}}}), or the characters \dQuote{XXX} which serves as a wildcard for a country code.
+\item Measure identification. One of the folowing upper-case characters:
+	\itemize{
+		\item \sQuote{P} - population, 
+		\item \sQuote{D} - deaths, 
+		\item \sQuote{B} - births, 
+		\item \sQuote{S} - survival ratio,
+		\item \sQuote{F} - fertility rate, 
+		\item \sQuote{M} - mortality rate, 
+		\item \sQuote{Q} - probability of dying,
+		\item \sQuote{G} - net migration.
+		}
+	All but the \sQuote{P} and \sQuote{G} indicators are available only if the {\code{\link{pop.predict}}} function was run with \code{keep.vital.events=TRUE}.
+\item Country part. One of the following:
+	\itemize{
+  		\item Numerical country code (as used in {\code{\link{LOCATIONS}}}, see \url{http://en.wikipedia.org/wiki/ISO_3166-1_numeric}), 
+  		\item two- or three-character ISO 3166 code, see \url{http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2}, \url{http://en.wikipedia.org/wiki/ISO_3166-1_alpha-3}, 
+  		\item characters \dQuote{XXX} which serves as a wildcard for a country code.
+  	}
 \item Sex part (optional): The country part can be followed by either \dQuote{_F} (for female) or \dQuote{_M} (for male).
-\item Age part (optional): If used, the basic component is concluded by an age index given as an array. Such array is embraced by either brackets (\dQuote{[} and \dQuote{]}) or curly braces (\dQuote{\{} and \dQuote{\}}). The former invokes a summation of counts over given ages, the latter is used when no summation is desired. Note that if this part is missing, counts are automatically summed over all ages. To use all ages without summing, empty curly braces can be used.
+\item Age part (optional): If used, the basic component is concluded by an age index given as an array. Such array is embraced by either brackets (\dQuote{[} and \dQuote{]}) or curly braces (\dQuote{\{} and \dQuote{\}}). The former invokes a summation of counts over given ages, the latter is used when no summation is desired. Note that if this part is missing, counts are automatically summed over all ages. To use all ages without summing, empty curly braces can be used. Age index one corresponds to age 0-4, index two corresponds to age 5-9 etc. Indicators \sQuote{S}, \sQuote{M} and \sQuote{Q} allow an index -1 which corresponds to age 0-1 and index 0 which corresponds to age 1-4. Use the pre-defined function \code{age.index01(\dots)} and \code{age.index05(\dots)} (see below) to define the right indices.
 }
-Examples of basic components are \dQuote{P276}, \dQuote{D50_F[4:10]}, \dQuote{PXXX\{14:27\}}, \dQuote{S4_M\{\}}.
+Not all combinations of the four parts above make sense. For example, \sQuote{F} can be only combined with female sex, \sQuote{B} and \sQuote{F} can be only combined with a subset of the age groups, namely child-bearing ages (indices 4 to 10). Or, there is no point in summing the rate indicators over sexes, i.e. using without the sex part, or over multiple age groups, i.e. using brackets.
+
+Examples of basic components are \dQuote{P276}, \dQuote{D50_F[4:10]}, \dQuote{PXXX\{14:27\}}, \dQuote{SCZE_M\{\}}, \dQuote{QIE_M[-1]}.
 
 When the expression is evaluated on a prediction object, each basic component is substituted by an array of four dimensions:
 \enumerate{
@@ -49,6 +67,10 @@ Depending on the context from which the expression is called, the trajectory dim
 	Applies function \code{fun} to the age dimension of \code{data} and converts the result into the same format as returned by a basic component. This allows combining the \code{apply} function with other basic components without having to modify their dimensions. For example, \cr
 	\dQuote{pop.apply(age.func(P752\{\}), fun=sum) / P752} gives the average age in Sweden, or \cr
 	\dQuote{pop.apply(P380\{\}, gmedian, cats=seq(0, by=5, length=28))} gives the median age of Italy.
+\item \code{age.index01(end)} \cr
+	Can be used with indicators \sQuote{S}, \sQuote{M} and \sQuote{Q} only. It returns an array of age group indices that include ages 0-1 and 1-4 and exclude 0-4. The last age index is \code{end}.
+\item \code{age.index05(end)} \cr
+	Returns an array of age group indices starting with group 0-4, 5-9 until the age group corresponding to index \code{end}.
 }
 }
 
@@ -57,7 +79,7 @@ Depending on the context from which the expression is called, the trajectory dim
 \author{Hana Sevcikova, Adrian Raftery}
 \seealso{\code{\link{pop.trajectories.plot}}, \code{\link{pop.map}}, {\code{\link{write.pop.projection.summary}}}.}
 \examples{
-sim.dir <- file.path(.find.package("bayesPop"), "ex-data", "Pop")
+sim.dir <- file.path(find.package("bayesPop"), "ex-data", "Pop")
 pred <- get.pop.prediction(sim.dir, write.to.cache=FALSE)
 
 # median child-bearing age of Netherlands and all countries - trajecotries
@@ -70,6 +92,9 @@ pop.trajectories.plotAll(pred, nr.traj=50,
 pop.trajectories.table(pred, 
     expression="pop.apply(age.func(P528_F{4:10}), fun=sum) / P528_F[4:10]")
 
+# migration per capita by age
+pop.byage.plot(pred, expression="GNL{} / PNL{}", year=2000)
+
 # potential support ratio - map
 pop.map(pred, expression="PXXX[5:13] / PXXX[14:27]")
 
@@ -77,5 +102,14 @@ pop.map(pred, expression="PXXX[5:13] / PXXX[14:27]")
 dir <- tempfile()
 write.pop.projection.summary(pred, expression="PXXX[1] / PXXX", output.dir=dir)
 unlink(dir)
+
+\dontrun{
+# These are vital events only available if keep.vital.events=TRUE in pop.predict 
+# log female mortality rate by age for Netherlands in 2050, including 0-1 and 1-4 age groups
+pop.byage.plot(pred, expression="log(MNL_F{age.index01(27)})", year=2050)
+
+# trajectories of male 1q0 and table of 5q0 for Netherlands
+pop.trajectories.plot(pred, expression="QNLD_M[-1]")
+pop.trajectories.table(pred, expression="QNLD_M[1]")}
 }
 \keyword{documentation}
