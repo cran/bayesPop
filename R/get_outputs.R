@@ -412,8 +412,10 @@ get.mx <- function(mxm, sex, age05=c(FALSE, FALSE, TRUE)) {
 		if(is.null(dim(res1))) res1 <- abind(res1, along=2)
 		res <- array(0, dim=c(dim(res1)[1], dim(res1)[2], dim(mxm)[3]))
 		res[,,1] <- res1
-		for (itraj in 2:dim(mxm)[3]) {
-			res[,, itraj] <- LifeTableMxCol(mxm[,, itraj], colname='mx', sex=sex, age05=age05)
+		if(dim(mxm)[3]> 1) { 
+			for (itraj in 2:dim(mxm)[3]) {
+				res[,, itraj] <- LifeTableMxCol(mxm[,, itraj], colname='mx', sex=sex, age05=age05)
+			}
 		}
 		return(res)
 	}
@@ -447,7 +449,10 @@ get.survival <- function(mxm, sex, age05=c(FALSE, FALSE, TRUE)) {
 		}
 		sx[,, itraj] <- apply(LLm, 2, 
 							function(x, sr) {
-								res.sr <- .C(fname, as.numeric(x), sx=sr); return(res.sr$sx)
+								if(!any(is.na(x))) {
+									res.sr <- .C(fname, as.numeric(x), sx=sr)
+									return(res.sr$sx)
+								} else return(rep(NA, length(x)))
 							}, sr)
 	}
 	return (sx)
@@ -983,6 +988,14 @@ drop.age <- function(data) {
 
 age.index01 <- function(end) return (c(-1,0,2:end))
 age.index05 <- function(end) return (1:end)
+	
+.solve.expression.for.country <- function(icountry, pop.pred, expression) {
+	country <- pop.pred$countries$code[icountry]
+	expr <- gsub('XXX', as.character(country), expression, fixed=TRUE)
+	trajectories <- get.pop.trajectories.from.expression(expr, pop.pred)
+	return(get.pop.traj.quantiles(NULL, pop.pred, icountry, country, 
+						trajectories=trajectories$trajectories,	q=get.quantiles.to.keep()))
+}
 
 get.pop.from.expression.all.countries <- function(expression, pop.pred, quantiles, projection.index) {
 	compressed.expr <- gsub("[[:blank:]]*", "", expression) # remove spaces
@@ -997,14 +1010,26 @@ get.pop.from.expression.all.countries <- function(expression, pop.pred, quantile
 		data <- matrix(NA, nrow=dim(pop.pred$quantiles)[1], ncol=length(quantiles))
 		pop.pred$cache[[compressed.expr]] <- array(NA, dim(pop.pred$quantilesM), dimnames=dimnames(pop.pred$quantilesM))
 	}
-	for(icountry in countries.idx) {
-		country <- pop.pred$countries$code[icountry]
-		expr <- gsub('XXX', as.character(country), expression, fixed=TRUE)
-		trajectories <- get.pop.trajectories.from.expression(expr, pop.pred)
-		quant <- get.pop.traj.quantiles(NULL, pop.pred, icountry, country, 
-						trajectories=trajectories$trajectories,	q=get.quantiles.to.keep())
-		pop.pred$cache[[compressed.expr]][icountry,,] <- quant
-		data[icountry,] <- quant[paste(quantiles*100, '%', sep=''), projection.index]
+	ncores <- getOption("cl.cores", detectCores())
+	if(ncores > 1 && length(countries.idx)>10) {
+		# This can take lots of time. Run it in parallel
+		cat('Evaluating expression for all countries in paralel on', ncores, 'cores.\n')
+		cl <- makeCluster(ncores)
+		clusterEvalQ(cl, {library(bayesPop)})
+		clusterExport(cl, c("pop.pred", "expression"), envir=environment())
+		quant.list <- parLapplyLB(cl, countries.idx, function(i) bayesPop:::.solve.expression.for.country(i, pop.pred, expression))
+		stopCluster(cl)
+		for(icountry in countries.idx) {
+			pop.pred$cache[[compressed.expr]][icountry,,] <- quant.list[[icountry]]
+			data[icountry,] <- quant.list[[icountry]][paste(quantiles*100, '%', sep=''), projection.index]
+		}
+	} else { # run sequantially
+		if(length(countries.idx)>10) cat('Evaluating expression for all countries sequentially. Please be patient.\n')
+		for(icountry in countries.idx) {
+			quant <- .solve.expression.for.country(icountry, pop.pred, expression)
+			pop.pred$cache[[compressed.expr]][icountry,,] <- quant
+			data[icountry,] <- quant[paste(quantiles*100, '%', sep=''), projection.index]
+		}
 	}
 	.save.cache(pop.pred)
 	return(data)	
