@@ -1,6 +1,6 @@
 # import
 import(
-    bayesTFR
+    bayesTFR, bayesLife, parallel, abind, wpp2012, plyr
 )
 
 #exportPattern("^[[:alpha:]]+")
