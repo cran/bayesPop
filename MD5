@@ -1,10 +1,10 @@
-a1db48185671ed56f6cc53f7c19367f6 *ChangeLog
-30374c5b55151c91e6dafda5f3a2496f *DESCRIPTION
-0b85fcc93a601ff53cfdd014eda764a9 *NAMESPACE
+43f9c7835cce642f40e9c368ae029043 *ChangeLog
+b9672685422b8317c62f940f5a0245dc *DESCRIPTION
+0a44fe169d9c8d35e1105f16f01d3467 *NAMESPACE
 863e3e0d6f900b95fc91399ed0baf577 *R/aggregate.R
-ec284ed250fc0245b3d7e87e83593fc0 *R/get_outputs.R
-96e5296edcb675289e68ba4f447a39d8 *R/plot_functions.R
-3249b8fcb848c502544ffca9cf7810e7 *R/predict.pop.R
+81e9f80f10c7e39e0e612d5938e0ffd6 *R/get_outputs.R
+6fce1649fbf48066b159955cf1253d89 *R/plot_functions.R
+f7b03278cd1b116d21775f55424aeb25 *R/predict.pop.R
 c6b64cabd43bf8bf7e58440de32c23f2 *R/zzz.R
 7e01de53da9ffc84a01c9e11087af0fe *data/vwBaseYear2008.R
 b838c6ad9de13017f2d02b95d060e582 *data/vwBaseYear2008.txt
@@ -18,8 +18,8 @@ caaf243c96af158b293b0628d9fffe89 *inst/ex-data/Pop/predictions/prediction.rda
 748bc98f0e16f690d4dc7faad126f606 *inst/ex-data/popestimates_WAKing.txt
 9d418cb11fad80ca282794ea61d0af4c *man/LifeTableMx.Rd
 a662383d12fdfc28fb75e0759b3ac8bb *man/bayesPop-internal.Rd
-96f68da6aa071ac03291a96b421bea04 *man/bayesPop-package.Rd
-f3ee97754b95d9fa449aec047791396b *man/expressions.Rd
+c99c02932949a9dfd22f046b1d63f513 *man/bayesPop-package.Rd
+b705347088e6b0edc45adebf1ea3010d *man/expressions.Rd
 bcef91ea9cb05019b72a55b6dd8c8e44 *man/get.countries.table.Rd
 6b7d4e4694fa5cc4fd8216cee327939a *man/get.pop.prediction.Rd
 ef52d4297a68f28b389430a2e741b8b4 *man/pop.aggregate.Rd
@@ -31,5 +31,5 @@ b12e85d305dbae8b5209c74854608fcf *man/predict.pop.Rd
 1e24a0839360762dc53f5e8564416246 *man/summary.bayesPop.prediction.Rd
 0c339416825dbdca4c56276152174d17 *man/vwBaseYear.Rd
 4714f03b98db44f5331aad4eaccc0a35 *src/projection_functions.c
-9af868e5b59891124dc438ab7742db50 *tests/run_tests.R
-832acd42afd02fe6a32b606fd715ec6b *tests/test_functions.R
+13e39e281b4a19bcf14ef403108e0e01 *tests/run_tests.R
+079615650508c3443226987a4d039d89 *tests/test_functions.R
