@@ -2,7 +2,6 @@
 get.expression.indicators <- function() {
 		return(list(D='deaths', B='births', S='survival', F='fertility', Q='qx', M='mx', G='migration'))
 }
-
 has.pop.prediction <- function(sim.dir) {
 	if(file.exists(file.path(sim.dir, 'predictions', 'prediction.rda'))) return(TRUE)
 	return(FALSE)
@@ -18,7 +17,7 @@ get.pop.prediction <- function(sim.dir, aggregation=NULL, write.to.cache=TRUE) {
 	output.dir <- file.path(sim.dir, 'predictions')
 	pop.pred <- .get.prediction.object(output.dir, 'predictions')
 	pop.pred$base.directory <- normalizePath(sim.dir)
-	pop.pred$cache <- .load.cache(sim.dir)
+	pop.pred$cache <- .load.cache(output.dir)
 	pop.pred$write.to.cache <- write.to.cache
 	pop.pred$is.aggregation <- FALSE
 	return(pop.pred)
@@ -45,7 +44,7 @@ get.pop.prediction <- function(sim.dir, aggregation=NULL, write.to.cache=TRUE) {
 .save.cache <- function(pop.pred) {
 	if(is.null(pop.pred$cache) || (!is.null(pop.pred$write.to.cache) && !pop.pred$write.to.cache)) return()
 	cache <- pop.pred$cache
-	save(cache, file=file.path(pop.pred$base.directory, 'cache.rda'))
+	save(cache, file=file.path(pop.output.directory(pop.pred), 'cache.rda'))
 }
 
 .remove.cache.file <- function(dir) {
@@ -55,11 +54,13 @@ get.pop.prediction <- function(sim.dir, aggregation=NULL, write.to.cache=TRUE) {
 
 pop.cleanup.cache <- function(pop.pred) {
 	if(!is.null(pop.pred$write.to.cache) && !pop.pred$write.to.cache) {
-		warning('No cache manipulation allowed for this prediction object.')
+		if(!is.null(pop.pred$cache))
+			warning('No cache manipulation allowed for this prediction object.')
 		return()
 	}
-	.remove.cache.file(pop.pred$base.directory)
-	rm(list=ls(pop.pred$cache), envir=pop.pred$cache)
+	.remove.cache.file(pop.output.directory(pop.pred))
+	if(!is.null(pop.pred$cache))
+		rm(list=ls(pop.pred$cache), envir=pop.pred$cache)
 	gc()
 	return()
 }
@@ -77,7 +78,7 @@ available.pop.aggregations <- function(pop.pred){
 	return(substr(dirs, 14, nchar(dirs)))
 }
 
-get.pop.aggregation <- function(sim.dir=NULL, pop.pred=NULL, name=NULL) {
+get.pop.aggregation <- function(sim.dir=NULL, pop.pred=NULL, name=NULL, write.to.cache=TRUE) {
 	############
 	# Returns an object of class bayesPop.prediction created by aggregation
 	############
@@ -100,6 +101,9 @@ get.pop.aggregation <- function(sim.dir=NULL, pop.pred=NULL, name=NULL) {
 	}
 	pop.aggr$base.directory <- normalizePath(sim.dir)
 	pop.aggr$is.aggregation <- TRUE
+	pop.aggr$cache <- .load.cache(pop.output.directory(pop.aggr))
+	pop.aggr$write.to.cache <- write.to.cache
+
 	return(pop.aggr)	
 }
 
@@ -163,6 +167,7 @@ get.pop.observed.with.age <- function(pop.pred, country, sex=c('both', 'male', '
 	} else data <- data[[sex]]
 	country.idx <- grep(paste('^', country, '_', sep='', collapse='|'), rownames(data), value=FALSE)
 	data <- data[country.idx,]
+	if(is.null(pop.pred$proj.years.pop)) colnames(data) <- as.integer(colnames(data)) + 2
 	max.age <- as.integer(round(nrow(data)/length(country),0))
 	age.idx <- if(age[1]=='all' || age[1]=='psr') 1:max.age else age
 	age.idx <- age.idx[age.idx <= max.age]
@@ -206,8 +211,14 @@ get.pop.observed.multiple.countries <- function(pop.pred, countries, sex=c('both
 get.psr.nominator.index <- function() return(5:13)
 get.psr.denominator.startindex <- function() return(14)
 
+.get.pop.quantiles <- function(pop.pred, what='', adjust=FALSE) {
+	quant <- pop.pred[[paste0('quantiles', what)]]
+	if(!adjust) return(quant)
+	return(adjust.quantiles(quant, what, env=pop.pred$adjust.env))
+}
+
 get.pop.trajectories <- function(pop.pred, country, sex=c('both', 'male', 'female'), age='all',
- 									nr.traj=NULL, typical.trajectory=FALSE) {
+ 									nr.traj=NULL, typical.trajectory=FALSE, adjust=FALSE) {
 	traj.file <- file.path(pop.output.directory(pop.pred), paste('totpop_country', country, '.rda', sep=''))
 	quant <- hch <- age.idx <- traj <- traj.idx <-  NULL
 	load.traj <- is.null(nr.traj) || nr.traj > 0 || typical.trajectory
@@ -215,13 +226,17 @@ get.pop.trajectories <- function(pop.pred, country, sex=c('both', 'male', 'femal
 		return(list(trajectories=traj, index=traj.idx, quantiles=quant, age.idx=age.idx, half.child=hch))
 	e <- new.env()
 	load(traj.file, envir=e)
+	if(adjust) {
+		if(is.null(pop.pred$adjust.env)) pop.pred$adjust.env <- new.env()
+		adjust.trajectories(country, e, pop.pred, pop.pred$adjust.env)
+	}
 	sex <- match.arg(sex)
 	max.age <- dim(e$totpf)[1] # should be 27
 	age.idx <- if(age[1]=='all' || age[1]=='psr') 1:max.age else age
 	if(max(age.idx) > 27 || min(age.idx) < 1) stop('Age index must be between 1 (age 0-4) and 27 (age 130+).')
 	if(sex == 'both' && age[1]=='all') {
 		if(load.traj) traj <- e$totp
-		quant <- pop.pred$quantiles
+		quant <- .get.pop.quantiles(pop.pred, adjust=adjust)
 		hch <- e$totp.hch
 	} else {
 		if (age[1] == 'psr') { # potential support ratio
@@ -244,13 +259,13 @@ get.pop.trajectories <- function(pop.pred, country, sex=c('both', 'male', 'femal
 				if(sex=='male') {
 					if(load.traj) traj <- colSums(e$totpm[age.idx,,,drop=FALSE])
 					hch <- colSums(e$totpm.hch[age.idx,,,drop=FALSE])
-					if (length(age.idx) == max.age) quant <- pop.pred$quantilesM
-					else {if (length(age.idx) == 1) quant <- pop.pred$quantilesMage[,age.idx,,]}
+					if (length(age.idx) == max.age) quant <- .get.pop.quantiles(pop.pred, what='M', adjust=adjust)
+					else {if (length(age.idx) == 1) quant <- .get.pop.quantiles(pop.pred, what='Mage', adjust=adjust)[,age.idx,,]}
 				} else { # female
 					if(load.traj) traj <- colSums(e$totpf[age.idx,,,drop=FALSE])
 					hch <- colSums(e$totpf.hch[age.idx,,,drop=FALSE])
-					if (length(age.idx) == max.age) quant <- pop.pred$quantilesF
-					else {if (length(age.idx) == 1) quant <- pop.pred$quantilesFage[,age.idx,,]}
+					if (length(age.idx) == max.age) quant <- .get.pop.quantiles(pop.pred, what='F', adjust=adjust)
+					else {if (length(age.idx) == 1) quant <- .get.pop.quantiles(pop.pred, what='Fage', adjust=adjust)[,age.idx,,]}
 				}
 			}
 		}
@@ -265,12 +280,13 @@ get.pop.trajectories <- function(pop.pred, country, sex=c('both', 'male', 'femal
 		}
 	}
 	if(!is.null(traj)) 
-	 	rownames(traj) <- pop.pred$proj.years
+	 	rownames(traj) <- litem('proj.years.pop', pop.pred, pop.pred$proj.years+2)
 	return(list(trajectories=traj, index=traj.idx, quantiles=quant, age.idx=age.idx, half.child=hch))
 }
 
 get.pop.trajectories.multiple.age <- function(pop.pred, country, sex=c('both', 'male', 'female'), 
-												age='all', nr.traj=NULL, proportion=FALSE, typical.trajectory=FALSE) {
+												age='all', nr.traj=NULL, proportion=FALSE, typical.trajectory=FALSE,
+												adjust=FALSE) {
 	# Like get.pop.trajectories() but it doesn't sum up over ages.
 	# Called when creating pop pyramid and pop.byage.*. Doesn't handle potential support ratio.
 	traj.file <- file.path(pop.output.directory(pop.pred), paste('totpop_country', country, '.rda', sep=''))
@@ -287,11 +303,11 @@ get.pop.trajectories.multiple.age <- function(pop.pred, country, sex=c('both', '
 		} else {
 			if(sex=='male') {
 				traj <- e$totpm[age.idx,,,drop=FALSE] 
-				quant <- pop.pred$quantilesMage[,age.idx,,]
+				quant <- .get.pop.quantiles(pop.pred, what='Mage', adjust=adjust)[,age.idx,,]
 				hch <- e$totpm.hch[age.idx,,,drop=FALSE]
 			} else {
 				traj <- e$totpf[age.idx,,,drop=FALSE]
-				quant <- pop.pred$quantilesFage[,age.idx,,]
+				quant <- .get.pop.quantiles(pop.pred, what='Fage', adjust=adjust)[,age.idx,,]
 				hch <- e$totpf.hch[age.idx,,,drop=FALSE]
 			}
 			if(proportion) {
@@ -687,7 +703,8 @@ get.age.labels <- function(ages, collapsed=FALSE, age.is.index=FALSE, last.open=
 	#h <- try(hist(year, breaks=breaks, plot=FALSE)$count, silent=TRUE)
 	#return(if(inherits(h, "try-error")) NULL else which(h > 0)[1])
 }
-get.pop.prediction.periods <- function(pop.pred) {
+get.pop.prediction.periods <- function(pop.pred, end.time.only=FALSE) {
+	if(end.time.only) return(litem('proj.years.pop', pop.pred, pop.pred$proj.years+2))
 	return(sapply(lapply(pop.pred$proj.years, '+', c(-3, 2)), paste, collapse='-'))
 }
 get.prediction.year.index <- function(pop.pred, year) {
@@ -698,8 +715,16 @@ get.prediction.year.index <- function(pop.pred, year) {
 get.observed.year.index <- function(pop.pred, year) 
 	return(.get.year.index(year, as.integer(colnames(pop.pred$inputs$pop.matrix$male))))
 
-get.pop.observed.periods <- function(pop.pred)
-	return(sapply(lapply(as.integer(colnames(pop.pred$inputs$pop.matrix$male)), '+', c(-3, 2)), paste, collapse='-'))
+get.pop.observed.periods <- function(pop.pred, end.time.only=FALSE) {
+	years <- as.integer(colnames(pop.pred$inputs$pop.matrix$male))
+	if(is.null(pop.pred$proj.years.pop)) { # assuring compatibility before version 5.0-1 where years are the middle time points
+		if(end.time.only) return(years + 2)
+	} else {
+		if(end.time.only) return(years)
+		years <- years - 2
+	}
+	return(sapply(lapply(years, '+', c(-3, 2)), paste, collapse='-'))
+}
 
 get.predORobs.year.index <- function (pred, year) 
 {
@@ -890,7 +915,8 @@ get.pop <- function(object, pop.pred, aggregation=NULL, observed=FALSE, ...) {
 			paste("get.pop('\\1', pop.pred,", args, ")"), expression))
 }
 
-get.pop.trajectories.from.expression <- function(expression, pop.pred, nr.traj=NULL, typical.trajectory=FALSE, ...) {
+get.pop.trajectories.from.expression <- function(expression, pop.pred, nr.traj=NULL, typical.trajectory=FALSE, 
+													adj.to.file=NULL, adj.country=NULL, ...) {
 	result <- eval(parse(text=.parse.pop.expression(expression, args='...')))
 	#stop('')
 	odim <- length(dim(result))
@@ -915,6 +941,8 @@ get.pop.trajectories.from.expression <- function(expression, pop.pred, nr.traj=N
 		else along <- if(odim > l) l+1 else l 
 		result <- abind(result, NULL, along=along)
 	}
+	if(!is.null(adj.to.file))
+		result <- adjust.to.dataset(adj.country, result, adj.file=adj.to.file, use='trajectories')
 	return(list(trajectories=result, index=traj.idx))
 }
 
@@ -923,8 +951,11 @@ get.pop.trajectories.from.expression.multiple.age <- function(expression, pop.pr
 	odim <- length(dim(result))
 	ntraj <- dim(result)[odim]
 	traj.idx <- NULL
-	if(odim == 4 && dim(result)[[1]] == 1) 
+	country.dropped <- FALSE
+	if(odim == 4 && dim(result)[[1]] == 1) {
 		result <- adrop(result, drop=1) # remove country dimension
+		country.dropped <- TRUE
+	}
 	if(ntraj > 1) {
 		if(typical.trajectory) {
 			traj.idx <- bayesTFR:::get.typical.trajectory.index(result[,1,])
@@ -938,21 +969,32 @@ get.pop.trajectories.from.expression.multiple.age <- function(expression, pop.pr
 		if(is.null(dim(result))) along <- 3
 		else {
 			l<-length(dim(result))
-			along <- if(odim > l) l+1 else l 
+			along <- if(odim > l && !country.dropped) l+1 else l 
 		}
 		result <- abind(result, NULL, along=along)
 	}
 	return(list(trajectories=result, index=traj.idx))
 }
 
+.get.compatible.pop.matrix.middle.years <- function(pop.pred) {
+	years <- colnames(pop.pred$inputs$pop.matrix[['male']])
+	return(if(is.null(pop.pred$proj.years.pop)) years else as.character(as.integer(years)-2))
+}
+
+.get.compatible.pop.matrix.end.years <- function(pop.pred) {
+	years <- colnames(pop.pred$inputs$pop.matrix[['male']])
+	return(if(is.null(pop.pred$proj.years.pop)) as.character(as.integer(years)+2) else years)
+}
 
 get.pop.observed.from.expression <- function(expression, pop.pred, as.vector=TRUE, ...) {
 	result <- eval(parse(text=.parse.pop.expression(expression, args='observed=TRUE, ...')))
 	if(as.vector) {
-		result <- as.vector(result)
-		l <- length(result)
-		end <- ncol(pop.pred$inputs$pop.matrix[['male']])
-		names(result) <- colnames(pop.pred$inputs$pop.matrix[['male']])[(end-l+1):end]
+		result <- drop(result)
+		if(is.null(names(result))) {
+			l <- length(result)
+			end <- ncol(pop.pred$inputs$pop.matrix[['male']])		
+			names(result) <- .get.compatible.pop.matrix.middle.years(pop.pred)[(end-l+1):end]
+		}
 	}
 	return(result)
 }
@@ -970,9 +1012,13 @@ get.pop.observed.from.expression.all.countries <- function(expression, pop.pred,
 		data <- adrop(data, drop=2) # remove age dimension
 	if(length(dim(data))==3 && dim(data)[[3]]==1) 
 		data <- adrop(data, drop=3) # remove trajectory dimension
-	if(!all(is.element(colnames(pop.pred$inputs$pop.matrix$male), dimnames(data)[[2]]))) 
-		stop('Error in second dimension of the expression.')
-	data <- data[,colnames(pop.pred$inputs$pop.matrix$male)]
+	years <- .get.compatible.pop.matrix.middle.years(pop.pred)
+	if(!all(is.element(years, dimnames(data)[[2]]))) {
+		years <- .get.compatible.pop.matrix.end.years(pop.pred)
+		if(!all(is.element(years, dimnames(data)[[2]]))) 
+			stop('Error in second dimension of the expression.')
+	}
+	data <- data[,years]
 	return(data[,time.index])
 }
 
@@ -1031,11 +1077,14 @@ pop.apply <- function(data, fun, ..., split.along=c('None', 'age', 'traj', 'coun
 		}
 		dim(data2) <- c(dim(data2)[1], rdim)
 	}
-	if(margin != 1) {# must be rearanged because aaply puts the sliced dimension in front
-		pos <- rep(NA, length(dim(data2)))
-		pos[margin] <- 1
-		pos[is.na(pos)] <- seq(2,length(dim(data2)))
-		data2 <- aperm(data2, pos)
+	if(margin != 1) {# must be rearanged because aaply sometimes puts the sliced dimension in front
+		which.not.equal <- which(dim(data1)!=dim(data2))
+		if(length(which.not.equal)>1 || (length(which.not.equal)==1 && which.not.equal==1)) {
+			pos <- rep(NA, length(dim(data2)))
+			pos[margin] <- 1
+			pos[is.na(pos)] <- seq(2,length(dim(data2)))
+			data2 <- aperm(data2, pos)
+		}
 	}
 	return(data2)
 }
@@ -1082,50 +1131,68 @@ drop.age <- function(data) {
 age.index01 <- function(end) return (c(-1,0,2:end))
 age.index05 <- function(end) return (1:end)
 	
-.solve.expression.for.country <- function(icountry, pop.pred, expression) {
+.solve.expression.for.country <- function(icountry, pop.pred, expression, adjust=FALSE) {
 	country <- pop.pred$countries$code[icountry]
 	expr <- gsub('XXX', as.character(country), expression, fixed=TRUE)
-	trajectories <- get.pop.trajectories.from.expression(expr, pop.pred)
+	trajectories <- get.pop.trajectories.from.expression(expr, pop.pred, adjust=adjust)
 	return(get.pop.traj.quantiles(NULL, pop.pred, icountry, country, 
 						trajectories=trajectories$trajectories,	q=get.quantiles.to.keep()))
 }
 
-get.pop.from.expression.all.countries <- function(expression, pop.pred, quantiles, projection.index) {
+get.pop.from.expression.all.countries <- function(expression, pop.pred, quantiles, projection.index, adjust=FALSE, adj.to.file=NULL) {
 	compressed.expr <- gsub("[[:blank:]]*", "", expression) # remove spaces
+	if(!is.null(adj.to.file)) {
+		adjust <- FALSE
+		adjdata <- read.table(adj.to.file, header=TRUE, check.names=FALSE)
+	}
+	.adjust.to.dataset.if.needed <- function(dat, cidx) {
+		if(is.null(adj.to.file)) return(dat)
+		res <- dat
+		for(i in 1:nrow(dat)) {
+			cntry <- pop.pred$countries$code[cidx[i]]
+			tmp <- adjust.to.dataset(country=cntry, q=dat[rownames(dat)==cntry,], adj.dataset=adjdata, years=get.pop.prediction.periods(pop.pred, end.time.only=TRUE)[projection.index], use="write")
+			if(length(tmp)==0) next # no adjustment
+			res[i,] <- tmp
+		}
+		return(res)
+	}
+	if(adjust) compressed.expr <- paste0(compressed.expr, '_adjusted')
 	if(!is.null(pop.pred$cache) && !is.null(pop.pred$cache[[compressed.expr]])) {
 		data <- pop.pred$cache[[compressed.expr]][,,projection.index]
 		data <- data[,as.character(quantiles), drop=FALSE]
 		.all.is.na <- function(x) return(all(is.na(x)))
 		countries.idx <- which(apply(data, 1, .all.is.na))
-		if(length(countries.idx) <= 0) return(data)
+		if(length(countries.idx) <= 0) return(.adjust.to.dataset.if.needed(data, 1:nrow(pop.pred$countries)))
 	} else {
 		countries.idx <- 1:nrow(pop.pred$countries)
 		data <- matrix(NA, nrow=dim(pop.pred$quantiles)[1], ncol=length(quantiles))
+		rownames(data) <- dimnames(pop.pred$quantiles)[[1]]
+		colnames(data) <- quantiles
 		pop.pred$cache[[compressed.expr]] <- array(NA, dim(pop.pred$quantilesM), dimnames=dimnames(pop.pred$quantilesM))
 	}
 	ncores <- getOption("cl.cores", detectCores())
 	if(ncores > 1 && length(countries.idx)>10) {
 		# This can take lots of time. Run it in parallel
-		cat('Evaluating expression for all countries in paralel on', ncores, 'cores.\n')
-		cl <- makeCluster(ncores)
-		clusterEvalQ(cl, {library(bayesPop)})
+		cat('Evaluating expression for all countries in parallel on', ncores, 'cores.\n')
+		cl <- create.pop.cluster(ncores)
 		clusterExport(cl, c("pop.pred", "expression"), envir=environment())
-		quant.list <- parLapplyLB(cl, countries.idx, function(i) .solve.expression.for.country(i, pop.pred, expression))
+		quant.list <- parLapplyLB(cl, countries.idx, function(i) .solve.expression.for.country(i, pop.pred, expression, adjust=adjust))
 		stopCluster(cl)
 		for(icountry in countries.idx) {
 			pop.pred$cache[[compressed.expr]][icountry,,] <- quant.list[[icountry]]
 			data[icountry,] <- quant.list[[icountry]][paste(quantiles*100, '%', sep=''), projection.index]
 		}
-	} else { # run sequantially
+	} else { # run sequentially
 		if(length(countries.idx)>10) cat('Evaluating expression for all countries sequentially. Please be patient.\n')
 		for(icountry in countries.idx) {
-			quant <- .solve.expression.for.country(icountry, pop.pred, expression)
+			quant <- .solve.expression.for.country(icountry, pop.pred, expression, adjust=adjust)
 			pop.pred$cache[[compressed.expr]][icountry,,] <- quant
 			data[icountry,] <- quant[paste(quantiles*100, '%', sep=''), projection.index]
 		}
 	}
 	.save.cache(pop.pred)
-	return(data)	
+	res <- .adjust.to.dataset.if.needed(data, countries.idx)
+	return(res)	
 }
 
 get.pop.observed.all.countries <- function(pop.pred, time.index, sex='both', age='all') {
@@ -1157,9 +1224,19 @@ get.pop.all.countries <- function(pop.pred, quantiles, projection.index, sex='bo
 	return(data)
 }
 
-litem <- function(x, i, default=NULL) { 
-	# return element of the list x if it exists otherwise default
+litem <- function(i, x, default=NULL) { 
+	# return element i of the list x if it exists otherwise default
 	i <- match(i, names(x)) # this is suppose to be faster than i %in% names(x)
 	if (is.na(i)) return(default) 
 	x[[i]]
 }
+
+as.environment.bayesPop.prediction <- function(pop.pred){
+	epred <- list2env(pop.pred)
+	class(epred) <- c(class(pop.pred), class(epred))
+	return(epred)
+}
+
+UNcountries <- function()
+	return(UNlocations$country_code[UNlocations$location_type==4])
+	

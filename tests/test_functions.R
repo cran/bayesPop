@@ -127,6 +127,7 @@ test.expressions.with.VE <- function(map=TRUE) {
 	pop.byage.plot(pred, expression="pop.combine(M218_F{age.index05(27)}, P218, '/')", year=2050)
 	pop.byage.plot(pred, expression="pop.combine(M218_F{age.index05(27)}, P218, '/')", year=1970)
 	pop.trajectories.plot(pred, expression="pop.combine(B218 - D218, G218, '+', split.along='traj')")
+	pop.trajectories.plot(pred, expression="pop.combine(G218, P218, '/', split.along='traj')")
 	if(map) pop.map(pred, expression="pop.combine(PXXX_M, P528, '/', split.along='country')", year=1980)
 	dev.off()
 	size <- file.info(filename)['size']
@@ -144,6 +145,13 @@ test.expressions.with.VE <- function(map=TRUE) {
 	size <- file.info(filename)['size']
 	unlink(filename)
 	stopifnot(size > 0)
+	
+	write.pop.projection.summary(pred, output.dir=sim.dir)
+	t <- read.table(file.path(sim.dir, 'projection_summary_tpop.csv'), sep=',', header=TRUE)
+	stopifnot(all(dim(t) == c(10,22)))
+	t <- read.table(file.path(sim.dir, 'projection_summary_asfrage.csv'), sep=',', header=TRUE)
+	stopifnot(all(dim(t) == c(70,23)))
+	
 	test.ok(test.name)
 	unlink(sim.dir, recursive=TRUE)
 }

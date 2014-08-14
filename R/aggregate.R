@@ -4,7 +4,7 @@ pop.aggregate <- function(pop.pred, regions, input.type=c('country', 'region'),
 						name = input.type,
 						inputs=list(e0F.sim.dir=NULL, e0M.sim.dir='joint_', tfr.sim.dir=NULL),
 						my.location.file=NULL,
-						verbose=FALSE) {
+						verbose=FALSE, ...) {
 	if(is.null(my.location.file))
 		bayesTFR:::load.bdem.dataset('UNlocations', pop.pred$wpp.year, envir=globalenv(), verbose=verbose)
 	else {
@@ -15,7 +15,7 @@ pop.aggregate <- function(pop.pred, regions, input.type=c('country', 'region'),
 	method <- match.arg(input.type)
 	if(missing(name)) name <- method
 	if(method == 'country') 
-		aggr.pred <- pop.aggregate.countries(pop.pred, regions, name, verbose=verbose)
+		aggr.pred <- pop.aggregate.countries(pop.pred, regions, name, verbose=verbose, ...)
 	if(method == 'region')
 		aggr.pred <- pop.aggregate.regional(pop.pred, regions, name, inputs=inputs, verbose=verbose)
 	invisible(get.pop.aggregation(pop.pred=pop.pred, name=name))
@@ -103,6 +103,8 @@ pop.aggregate.regional <- function(pop.pred, regions, name,
 		inp$e0Mpred <- get.e0.jmale.prediction(inp$e0Fpred)
 	} else inp$e0Mpred <- get.e0.prediction(if(is.null(inputs$e0M.sim.dir)) pop.pred$function.inputs$e0M.sim.dir else inputs$e0M.sim.dir)
 	outdir <- gsub('predictions', paste('aggregations', name, sep='_'), pop.output.directory(pop.pred))
+	if(file.exists(outdir)) unlink(outdir, recursive=TRUE)
+	dir.create(outdir, recursive=TRUE)
 	aggr.pred <- do.pop.predict(regions, inp=inp, outdir=outdir, nr.traj=pop.pred$nr.traj, ages=pop.pred$ages, verbose=verbose)
 	aggr.pred <- .cleanup.pop.before.save(aggr.pred, remove.cache=TRUE)
 	aggr.pred$aggregation.method <- 'region'
@@ -147,13 +149,14 @@ pop.aggregate.regional <- function(pop.pred, regions, name,
 		popmatrix <- popmatrix.all[[item]]
 		pop.countries.ages <- matrix(unlist(strsplit(rownames(popmatrix), '_')), ncol=2, byrow=TRUE)
 		pop.idx <- is.element(pop.countries.ages[,1], countries)
-		pop.colidx <- which(is.element(as.integer(colnames(popmatrix))-3, unlist(strsplit(colnames(pop.pred$inputs[[item]])[3:ncol(pop.pred$inputs[[item]])], '-'))))
+		years.mx <- unlist(strsplit(colnames(pop.pred$inputs[[item]])[3:ncol(pop.pred$inputs[[item]])], '-'))
+		pop.colidx <- which(is.element(as.integer(colnames(popmatrix)), years.mx[seq(2,length(years.mx),by=2)]))
 		res[[item]] <- as.data.frame(matrix(NA, nrow=22, ncol=ncol(pop.pred$inputs[[item]]), 
 						dimnames=list(c(0, 1, seq(5, 95, by=5), '100+'), colnames(pop.pred$inputs[[item]]))))
 		trim.age <- gsub(' ', '', pop.pred$inputs[[item]][,'age'])
 		trim.age.unique <- unique(trim.age)
 		for(age in rownames(res[[item]])) {
-			mort.age <- if(age == '100+' && !(age %in%  trim.age.unique)) '100' else age # in wpp2012 there is no '100+'
+			mort.age <- if(age == '100+') '100' else age # in wpp2012 there is no '100+' (in the new one there is) [&& !(age %in%  trim.age.unique)]
 			mort.age.idx <- mort.idx & trim.age == mort.age
 			pop.age.idx <- rep(0, nrow(pop.countries.ages))
 			if(age == "0" || age =="1") pattern <- '^0-4'
@@ -211,7 +214,7 @@ pop.aggregate.regional <- function(pop.pred, regions, name,
 }
 
 
-pop.aggregate.countries <- function(pop.pred, regions, name, verbose=verbose) {
+pop.aggregate.countries <- function(pop.pred, regions, name, verbose=verbose, adjust=FALSE) {
 	if(verbose) cat('\nAggregating using countries as inputs.')
 	nreg <- length(regions)
 	quantiles.to.keep <- as.numeric(dimnames(pop.pred$quantiles)[[2]])
@@ -244,28 +247,31 @@ pop.aggregate.countries <- function(pop.pred, regions, name, verbose=verbose) {
 		id.idx <- id.idx + 1
 		valid.regions[reg.idx] <- TRUE
 		countries.index <- which(is.element(pop.pred$countries[,'code'], countries))
+		e <- new.env()
+		if(adjust && is.null(pop.pred$adjust.env)) pop.pred$adjust.env <- new.env()
 		for(cidx in 1:length(countries.index)) {
 			country.obs.idx <- grep(paste('^', countries[cidx], '_', sep=''), rownames(obs.data[['male']]), value=FALSE)
 			traj.file <- file.path(pop.output.directory(pop.pred), paste('totpop_country', countries[cidx], '.rda', sep=''))
-			load(traj.file)
+			load(traj.file, envir=e)
+			if(adjust) adjust.trajectories(countries[cidx], e, pop.pred, pop.pred$adjust.env)
 			if(cidx == 1) {
-				stotp <- totp
-				stotpm <- totpm
-				stotpf <- totpf
-				stotp.hch <- totp.hch
-				stotpm.hch <- totpm.hch
-				stotpf.hch <- totpf.hch
+				stotp <- e$totp
+				stotpm <- e$totpm
+				stotpf <- e$totpf
+				stotp.hch <- e$totp.hch
+				stotpm.hch <- e$totpm.hch
+				stotpf.hch <- e$totpf.hch
 				aggr.obs.dataM <- obs.data[['male']][country.obs.idx,]
 				aggr.obs.dataF <- obs.data[['female']][country.obs.idx,]
 				rownames(aggr.obs.dataM) <- rownames(aggr.obs.dataF) <- sub(paste(countries[cidx], '_', sep=''), 
 																paste(id, '_', sep=''), rownames(obs.data[['male']][country.obs.idx,]))
 			} else {
-				stotp <- stotp + totp
-				stotpm <- stotpm + totpm
-				stotpf <- stotpf + totpf
-				stotp.hch <- stotp.hch + totp.hch
-				stotpm.hch <- stotpm.hch + totpm.hch
-				stotpf.hch <- stotpf.hch + totpf.hch
+				stotp <- stotp + e$totp
+				stotpm <- stotpm + e$totpm
+				stotpf <- stotpf + e$totpf
+				stotp.hch <- stotp.hch + e$totp.hch
+				stotpm.hch <- stotpm.hch + e$totpm.hch
+				stotpf.hch <- stotpf.hch + e$totpf.hch
 				aggr.obs.dataM <- aggr.obs.dataM + obs.data[['male']][country.obs.idx,]
 				aggr.obs.dataF <- aggr.obs.dataF + obs.data[['female']][country.obs.idx,]
 			}
@@ -315,6 +321,7 @@ pop.aggregate.countries <- function(pop.pred, regions, name, verbose=verbose) {
 	aggr.pred$traj.mean.sdF <- mean_sdF
 	aggr.pred$aggregation.method <- 'country'
 	aggr.pred$aggregated.countries <- aggregated.countries
+	aggr.pred$inputs <- as.environment(as.list(pop.pred$inputs, all.names=TRUE)) # clone environment
 	aggr.pred$inputs$pop.matrix <- aggr.obs.data
 	bayesPop.prediction <- .cleanup.pop.before.save(aggr.pred, remove.cache=TRUE)
 	save(bayesPop.prediction, file=file.path(outdir, 'prediction.rda'))
