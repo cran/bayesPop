@@ -18,13 +18,16 @@ pop.predict <- function(end.year=2100, start.year=1950, present.year=2010, wpp.y
 							tfr.sim.dir=NULL,
 							migMtraj=NULL, migFtraj=NULL	
 						), nr.traj = 1000, keep.vital.events=FALSE,
-						fixed.mx=FALSE, replace.output=FALSE, 
+						fixed.mx=FALSE, my.locations.file = NULL, replace.output=FALSE, 
 						verbose=TRUE) {
 	prediction.exist <- FALSE
 	ages=seq(0, by=5, length=27)
 	unblock.gtk.if.needed('reading inputs')
-
-	bayesTFR:::load.bdem.dataset('UNlocations', wpp.year, envir=globalenv(), verbose=verbose)
+	if(!is.null(my.locations.file)) {
+		UNlocations <- NULL # needed for R check not to complain
+		UNlocations <<- read.delim(file=my.locations.file, comment.char='#', check.names=FALSE)
+		if(verbose) cat('Loading ', my.locations.file, '.\n')
+	} else bayesTFR:::load.bdem.dataset('UNlocations', wpp.year, envir=globalenv(), verbose=verbose)
 	if(is.null(countries)) inp <- load.inputs(inputs, start.year, present.year, end.year, wpp.year, fixed.mx=fixed.mx, verbose=verbose)
 	else {
 		if(has.pop.prediction(output.dir) && !replace.output) {
@@ -249,7 +252,8 @@ do.pop.predict <- function(country.codes, inp, outdir, nr.traj, ages, pred=NULL,
 				mxf.hch[,1,variant] <- mxf[,1,1]
 			}
 		}
-		save(totp, totpm, totpf, totp.hch, totpm.hch, totpf.hch,
+		trajectory.indices <- inpc$trajectory.indices
+		save(totp, totpm, totpf, totp.hch, totpm.hch, totpf.hch, trajectory.indices,
 			 file = file.path(outdir, paste0('totpop_country', country, '.rda')))
 		if(keep.vital.events) 
 			save(btm, btf, deathsm, deathsf, asfert, pasfert, mxm, mxf, migm, migf,
@@ -749,7 +753,10 @@ kantorova.pasfr <- function(tfr, inputs, norms, proj.years, tfr.med) {
 	p.e <- pasfr.obs[,ncol(pasfr.obs)-2]/100.
 	p.e <- pmax(p.e, min.value)
 	p.e <- p.e/sum(p.e)
-	tau.denominator2 <- t.r - years[startTi-3]
+	if(startTi < 3) { # not enough observed data
+		yd <- years[1] - 5 * (3-startTi)
+	} else yd <- years[startTi-3]
+	tau.denominator2 <- t.r - yd
 	logit.dif <- logit.pr - logit(p.e)
 	for(t in 1:ncol(asfr2)){
 		asfr2[,t] <- logit.pr + ((years[t+tobs] - t.r)/tau.denominator2) *logit.dif
@@ -766,7 +773,6 @@ kantorova.pasfr <- function(tfr, inputs, norms, proj.years, tfr.med) {
 	}
 	res.asfr <- inv.logit(res.asfr)
 	res.asfr <- scale(res.asfr, center=FALSE, scale=colSums(res.asfr))
-	#stop('')
 	if(start.phase3 <= lyears) res.asfr <- update.by.mac(res.asfr, max(1, start.phase3-tobs))
 	return(res.asfr)
 }
@@ -933,6 +939,7 @@ get.country.inputs <- function(country, inputs, nr.traj, country.name) {
 		inpc$mig.nr.traj <- length(indices[[par]])
 	}
 	inpc$observed <- obs
+	inpc$trajectory.indices <- indices
 	return(inpc)
 }
 
@@ -1244,7 +1251,7 @@ compute.observedVE <- function(inputs, pop.matrix, mig.type, mxKan, country.code
 	obs <- inputs$observed
 	if(is.null(obs$PASFR)) return(NULL)
 	npasfr <- nrow(obs$PASFR)
-	nest <- min(length(obs$TFRpred), ncol(obs$PASFR), sum(!is.na(obs$MIGm[1,])))
+	nest <- min(length(obs$TFRpred), ncol(obs$PASFR), sum(!is.na(obs$MIGm[1,])), length(estim.years))
 	estim.years <- estim.years[(length(estim.years)-nest+1):length(estim.years)]
 	pasfr <- obs$PASFR[,(ncol(obs$PASFR)-nest+1):ncol(obs$PASFR), drop=FALSE]
 	tfr <- obs$TFRpred[(length(obs$TFRpred)-nest+1):length(obs$TFRpred)]
@@ -1265,7 +1272,7 @@ compute.observedVE <- function(inputs, pop.matrix, mig.type, mxKan, country.code
 						data=pop.matrix)
 		pop[[sex]] <- tpop$data[tpop$age.idx,(ncol(tpop$data)-nest):ncol(tpop$data)]
 	}
-	bt <- (pop[[2]][4:10,2:ncol(pop[[2]])] + pop[[2]][4:10,1:(ncol(pop[[2]])-1)]) * asfr * 0.5
+	bt <- (pop[[2]][4:10,-1] + pop[[2]][4:10,-ncol(pop[[2]])]) * asfr * 0.5
 	births[[1]] <- bt * srb.ratio
 	births[[2]] <- bt - births[[1]]
 	for(sex in 1:2) {		
@@ -1279,6 +1286,7 @@ compute.observedVE <- function(inputs, pop.matrix, mig.type, mxKan, country.code
 		deaths[[sex]] <- matrix(res$Deaths, nrow=21)
 		colnames(deaths[[sex]]) <- estim.years
 		rownames(deaths[[sex]]) <- rownames(pop[[sex]])
+		colnames(births[[sex]]) <- estim.years
 	}	
 	colnames(asfr) <- estim.years
 	rownames(asfr) <- rownames(births[[1]])
@@ -1294,17 +1302,15 @@ write.pop.projection.summary <- function(pop.pred, what=NULL, expression=NULL, o
 	if (is.null(output.dir)) output.dir <- pop.output.directory(pred)
 	if(!file.exists(output.dir)) dir.create(output.dir, recursive=TRUE)
 	all.what <- c('pop', 'popsex', 'popsexage', 'popage', 'births', 'birthssex', 'birthsage', 'birthssexage', 
-			'deaths', 'deathssex', 'deathsage', 'deathssexage', 'srsexage', 'fertility', 'fertilityage')
+			'deaths', 'deathssex', 'deathsage', 'deathssexage', 'srsexage', 'fertility', 'fertilityage', 'pfertilityage')
 	what <- if(is.null(what)) all.what else match.arg(what, all.what, several.ok=TRUE)
 	params <- list()
 	if(!is.null(expression)) {
-		#write.expression(pop.pred, expression=expression, output.dir=output.dir, ...)
 		what <- 'expression'
 		params <- list(expression=expression)
-	} #else {
-		for(summary.type in what) 
-			do.call(paste0('write.', summary.type), c(list(pred, output.dir=output.dir), params, ...))
-	#}
+	}
+	for(summary.type in what) 
+		do.call(paste0('write.', summary.type), c(list(pred, output.dir=output.dir), params, ...))
 }
 
 write.pop <- function(pop.pred, output.dir, ...) 
@@ -1362,9 +1368,14 @@ write.fertility <- function(pop.pred, output.dir, ...)
 write.fertilityage <- function(pop.pred, output.dir, ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=TRUE, vital.event='fertility', 
 			file.suffix='asfr', what.log='fertility rate', digits=litem('digits', list(...), 4))
+			
+write.pfertilityage <- function(pop.pred, output.dir, ...) 
+	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=TRUE, vital.event='pasfr', 
+			file.suffix='pasfr', what.log='percent fertility rate', digits=litem('digits', list(...), 4))
 	
-write.expression <- function(pop.pred, expression, output.dir, file.suffix='expression', expression.label=expression,  
-								include.observed=FALSE, digits=NULL, adjust=FALSE, adj.to.file=NULL, end.time.only=FALSE) {
+write.expression <- function(pop.pred, expression, output.dir, file.suffix='expression', 
+							expression.label=expression, include.observed=FALSE, digits=NULL, 
+							adjust=FALSE, adj.to.file=NULL, end.time.only=FALSE) {
 	cat('Creating summary file for expression ', expression, ' ...\n')
 	header <- list(country.name='country_name',  country.code='country_code', variant='variant')
 	variant.names <- c('median', 'lower 80', 'upper 80', 'lower 95', 'upper 95')
@@ -1376,9 +1387,9 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 		obs.period <- get.pop.observed.periods(pop.pred, end.time.only=end.time.only)
 		nr.obs <- length(obs.period)-1
 		obs.period <- obs.period[-(nr.obs+1)] # remove the last one because the same as the first projection period
-		for(iyear in 1:nr.obs) header[[paste('year', iyear, sep='')]] <- obs.period[iyear]
+		for(iyear in 1:nr.obs) header[[paste0('year', iyear)]] <- obs.period[iyear]
 	}
-	for(iyear in 1:nr.proj) header[[paste('year', iyear+nr.obs, sep='')]] <- pred.period[iyear]
+	for(iyear in 1:nr.proj) header[[paste0('year', iyear+nr.obs)]] <- pred.period[iyear]
 	col.names <- grep('year', names(header), value=TRUE)
 	result <- NULL
 	if(include.observed) {
@@ -1409,7 +1420,8 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 }	
 	
 .write.pop <- function(pop.pred, output.dir, bysex=FALSE, byage=FALSE, vital.event=NULL, file.suffix='tpop', 
-							what.log='total population', digits=0, adjust=FALSE) {
+							what.log='total population', include.observed=FALSE, digits=0, adjust=FALSE, 
+							end.time.only=FALSE) {
 	cat('Creating summary file of ', what.log, ' ')
 	if(bysex) cat('by sex ')
 	if(byage) cat('by age ')
@@ -1419,11 +1431,19 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 	if(byage) header[['age']] <- 'age'
 	variant.names <- c('median', 'lower 80', 'upper 80', 'lower 95', 'upper 95')
 	nr.var <- length(variant.names)
-	pred.period <- get.pop.prediction.periods(pop.pred, end.time.only=is.null(vital.event))
+	if(missing(end.time.only)) end.time.only <- is.null(vital.event)
+	pred.period <- get.pop.prediction.periods(pop.pred, end.time.only=end.time.only)
 	#if(!is.null(vital.event)) pred.period <- pred.period[2:length(pred.period)]
+	nr.obs <- 0
+	if(include.observed) {
+		obs.period <- get.pop.observed.periods(pop.pred, end.time.only=end.time.only)
+		nr.obs <- length(obs.period)-1
+		obs.period <- obs.period[-(nr.obs+1)] # remove the last one because the same as the first projection period
+		for(iyear in 1:nr.obs) header[[paste0('year', iyear)]] <- obs.period[iyear]
+	}
 	nr.proj <- length(pred.period)
 	for (i in 1:nr.proj) 
-		header[[paste('year', i, sep='')]] <- pred.period[i]
+		header[[paste0('year', i+nr.obs)]] <- pred.period[i]
 	col.names <- grep('year', names(header), value=TRUE)
 	result <- NULL
 	sex.index <- c(TRUE, FALSE, FALSE)
@@ -1432,11 +1452,15 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 	if(byage) age.index <- !age.index
 	ages <- 1:length(pop.pred$ages)
 	if(adjust && is.null(pop.pred$adjust.env)) pop.pred$adjust.env <- new.env()
+	observed.data <- NULL
 	for (country in 1:nrow(pop.pred$countries)) {
 		country.obj <- get.country.object(country, country.table=pop.pred$countries, index=TRUE)
 		for(sex in c('both', 'male', 'female')[sex.index]) {
 			if(!is.null(vital.event)) {
 			 	sum.over.ages <- age.index[1]
+			 	if(include.observed) 
+			 		observed <- get.popVE.trajectories.and.quantiles(pop.pred, country.obj$code, event=vital.event, 
+										sex=sex, age='all', sum.over.ages=sum.over.ages, is.observed=TRUE)
 				traj.and.quantiles <- get.popVE.trajectories.and.quantiles(pop.pred, country.obj$code, event=vital.event, 
 										sex=sex, age='all', sum.over.ages=sum.over.ages)
 				if(is.null(traj.and.quantiles$trajectories)) {
@@ -1462,17 +1486,28 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 					this.result <- cbind(this.result, age=rep(get.age.labels(pop.pred$ages)[age], nr.var))
 				}
 				if(is.null(vital.event)) {
+					if(include.observed) 
+						observed.data <- get.pop.observed(pop.pred, country.obj$code, sex=sex, age=age)
 					quant <- get.pop.trajectories(pop.pred, country.obj$code, nr.traj=0, sex=sex, age=age, adjust=adjust)$quantiles
 					traj <- NULL
 					reload <- TRUE
 				} else { # vital event
 					quant <- traj.and.quantiles$quantiles
 					traj <- traj.and.quantiles$trajectories
+					if(include.observed)
+						observed.data <- observed$trajectories[,,1]
 					if(!sum.over.ages) {
 						quant <- quant[age-subtract.from.age,,]
 						traj <- traj[age-subtract.from.age,,]
+						if(include.observed) {
+							if (age-subtract.from.age > nrow(observed.data)) # because observed goes only up to 100+
+								observed.data <- rep(0, ncol(observed.data))
+							else
+								observed.data <- observed.data[age-subtract.from.age,]
+						}
 					}
 					reload <- FALSE
+					#stop('')
 				}
 				proj.result <- round(rbind(
 					get.pop.traj.quantiles(quant, pop.pred, country.obj$index, country.obj$code, q=0.5, 
@@ -1482,7 +1517,14 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 					get.pop.traj.quantiles(quant, pop.pred, country.obj$index, country.obj$code, pi=95, 
 											trajectories=traj, reload=reload)),
 					digits)
+				if(!is.null(observed.data)) {
+					# put it into the same shape as proj.result minus the last observed
+					observed.data <- round(rbind(observed.data, NULL), digits)
+					observed.data <- observed.data[rep(1, nrow(proj.result)), -ncol(observed.data)]
+					proj.result <- cbind(observed.data, proj.result)
+				}
 				colnames(proj.result) <- col.names
+				#stop('')
 				this.result <- cbind(this.result, proj.result)
 				result <- rbind(result, this.result)
 			}
