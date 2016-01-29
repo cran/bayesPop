@@ -1,11 +1,11 @@
-14de2527b4bc675d9d40016b7d2dc4a5 *ChangeLog
-f4cb93a705cd95df973d52708a94e243 *DESCRIPTION
+235ef2aefb98ee5bbeb861c3ccbaad44 *ChangeLog
+a978b45163163c6230ed01226eb747c9 *DESCRIPTION
 7da34d342a73351aae7607cdbac60b22 *NAMESPACE
 9cbbd0a2d7096037a7018755d4f2f9d7 *R/adjustments.R
 76fe6063d21458f0fade6ba28617d5bb *R/aggregate.R
-c1eeb20f08a97d8b6f679f7c8c187030 *R/get_outputs.R
+5efe150d881592b981a549d7c9791474 *R/get_outputs.R
 cfc844a453a9730b853ee4f0fe236958 *R/plot_functions.R
-4c0544255a8c463eff8f1b8319d8cad8 *R/predict.pop.R
+f60f2f6efc3b21b1c717d95ac28f1a4f *R/predict.pop.R
 c6b64cabd43bf8bf7e58440de32c23f2 *R/zzz.R
 e51ae12bdc34ceb7c72cfdf8c3cd580e *data/MLTbx.R
 33f4150caf01152ee58a2d6023e8fc36 *data/MLTbx.txt
@@ -19,11 +19,11 @@ a1cd5a12dfa759048f8d1bb98c4873bf *data/vwBaseYear2012.R
 830a6f03906db82b68f9d691ddc3650d *inst/ex-data/Pop/predictions/totpop_country218.rda
 7c5cbb9a03ccaa6e6df3608b86fab0bb *inst/ex-data/Pop/predictions/totpop_country528.rda
 748bc98f0e16f690d4dc7faad126f606 *inst/ex-data/popestimates_WAKing.txt
-6ac4ca5595313e6fa66e834c3e07fe9f *man/LifeTableMx.Rd
+bd549e9c89e719ccd82ce6ca91fe1d92 *man/LifeTableMx.Rd
 713b8be7e324ab2b08ba309c1ed258b0 *man/MLTbx.Rd
 545e09c25ff915dd654264febb6488b7 *man/age.specific.migration.Rd
 a662383d12fdfc28fb75e0759b3ac8bb *man/bayesPop-internal.Rd
-417ff7edc965eeea07dca40aac3130d6 *man/bayesPop-package.Rd
+9bc91748b851a6660b8c240f7c1878b6 *man/bayesPop-package.Rd
 7a4a933cc9832ae1b8ca3e389b98232d *man/cohorts.Rd
 212259b33fbb1e5bd4d9949b4d397846 *man/expressions.Rd
 bcef91ea9cb05019b72a55b6dd8c8e44 *man/get.countries.table.Rd
@@ -40,4 +40,4 @@ b5abfdeaca39ddea0152707a084bafef *man/pop.write.projection.summary.Rd
 88e74fdf34d79cb2feb4eb309c8b169f *man/vwBaseYear.Rd
 8696f387c23cfadbcb438ae56b9866f2 *src/projection_functions.c
 59b2371fdf8d6aefd1e8e655bf7b9a46 *tests/run_tests.R
-950fc6769814100e260044635f7bbb1b *tests/test_functions.R
+736299c9d844fbc20e2bd5c0050c796a *tests/test_functions.R

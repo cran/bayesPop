@@ -1,8 +1,8 @@
 Package: bayesPop
 Type: Package
 Title: Probabilistic Population Projection
-Version: 6.0-0
-Date: 2016-1-15
+Version: 6.0-1
+Date: 2016-1-29
 Author: Hana Sevcikova, Adrian Raftery, Thomas Buettner
 Maintainer: Hana Sevcikova <hanas@uw.edu>
 Depends: R (>= 2.14.2), bayesTFR (>= 4.2-0), bayesLife (>= 2.2-0)
@@ -12,6 +12,6 @@ Imports: parallel, abind, plyr, wpp2015, wpp2012, graphics, grDevices,
 Description: Generating population projections for all countries of the world using several probabilistic components, such as total fertility rate (TFR) and life expectancy.
 License: GPL (>= 2)
 NeedsCompilation: yes
-Packaged: 2016-01-16 01:31:39 UTC; hana
+Packaged: 2016-01-29 21:32:54 UTC; hana
 Repository: CRAN
-Date/Publication: 2016-01-16 07:52:05
+Date/Publication: 2016-01-29 22:49:04
