@@ -1,12 +1,12 @@
-2459fb18cd283976aa6478add1beecb1 *ChangeLog
-300caccef63983defeda1035ce00dc72 *DESCRIPTION
+2569c805c696e8be9ee3edcc28206295 *ChangeLog
+3c01fda1207be9fa6ae5c180a87b433f *DESCRIPTION
 29c84bbd805d8c5a4f140ce779f7e16f *NAMESPACE
 080af037d48424a442f958947f7bee59 *R/adjustments.R
 76fe6063d21458f0fade6ba28617d5bb *R/aggregate.R
 c8840234bbe3bb0d8a29642d20569a06 *R/get_outputs.R
 b50fca2ae42c0bb808d155a5b04fbfd6 *R/pasfr.R
 490138dc3bef5d42483359fa73aa7216 *R/plot_functions.R
-e4268b6ca5a11a0159590789866a79ee *R/predict.pop.R
+1e0e12a34864adb62e4fcc390e9ac022 *R/predict.pop.R
 c6b64cabd43bf8bf7e58440de32c23f2 *R/zzz.R
 e51ae12bdc34ceb7c72cfdf8c3cd580e *data/MLTbx.R
 33f4150caf01152ee58a2d6023e8fc36 *data/MLTbx.txt
@@ -28,7 +28,7 @@ d280b58f4d5403182e227e32df38b831 *data/vwBaseYear2017.R
 713b8be7e324ab2b08ba309c1ed258b0 *man/MLTbx.Rd
 4d44a939b463988f982a0815f22eff6b *man/age.specific.migration.Rd
 a0ab425a16cab573bbb9345edda7fc9c *man/bayesPop-internal.Rd
-4e1c5c8bfb4e1f454b67be555f81f0fd *man/bayesPop-package.Rd
+f978cc6fedf5b0ada7a0cda341419be4 *man/bayesPop-package.Rd
 7a4a933cc9832ae1b8ca3e389b98232d *man/cohorts.Rd
 6b52af7032f3baa9c820b8a887775449 *man/expressions.Rd
 bcef91ea9cb05019b72a55b6dd8c8e44 *man/get.countries.table.Rd
@@ -39,7 +39,7 @@ f4fc97f62c1d4bda7dbc4b2bb0415f3e *man/pop.map.Rd
 f964eaa4d95838823032835c10e35df9 *man/pop.pyramid.Rd
 d90085336bea8dce81da3b841b453e5f *man/pop.trajectories.plot.Rd
 45f5a108b283c6a2cc623312ad978c7a *man/pop.write.projection.summary.Rd
-fa781034e9303f28eee6b3e7a440fb40 *man/predict.pop.Rd
+db1ca47e8d1b9dd7376b57a1720b616a *man/predict.pop.Rd
 46036ab274f7164f6f97751e7b3155b2 *man/project.pasfr.Rd
 9acc6cf60e4768607b2b8b8f30199fd2 *man/specific_expressions.Rd
 1e24a0839360762dc53f5e8564416246 *man/summary.bayesPop.prediction.Rd

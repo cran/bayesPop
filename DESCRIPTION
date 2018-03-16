@@ -1,8 +1,8 @@
 Package: bayesPop
 Type: Package
 Title: Probabilistic Population Projection
-Version: 6.2-3
-Date: 2017-10-22
+Version: 6.2-4
+Date: 2018-03-15
 Author: Hana Sevcikova, Adrian Raftery, Thomas Buettner
 Maintainer: Hana Sevcikova <hanas@uw.edu>
 Depends: R (>= 2.14.2), bayesTFR (>= 5.0-4), bayesLife (>= 3.0-1)
@@ -13,6 +13,6 @@ Description: Generating population projections for all countries of the world us
 License: GPL (>= 2)
 URL: https://bayespop.csss.washington.edu
 NeedsCompilation: yes
-Packaged: 2017-10-23 01:39:17 UTC; hana
+Packaged: 2018-03-15 22:42:46 UTC; hana
 Repository: CRAN
-Date/Publication: 2017-10-23 07:22:55 UTC
+Date/Publication: 2018-03-16 08:58:00 UTC
