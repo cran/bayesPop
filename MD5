@@ -1,5 +1,5 @@
-c63724cc1a720918ab7d1d675c77ecf9 *ChangeLog
-37c52ee13331ab0f7ad629b35fc8511e *DESCRIPTION
+8e01c145937264dfa9508a5f23efef5a *ChangeLog
+5bec1b1360e7f0e0de7e324330f0481f *DESCRIPTION
 9e386bcb2a4144d73a068bacb404b0a7 *LICENSE
 3f59fa3cac66935f2539530553c66d24 *NAMESPACE
 f97d0255c447f5cdb19cf2004bb8ff99 *R/adjustments.R
@@ -10,7 +10,7 @@ f97d0255c447f5cdb19cf2004bb8ff99 *R/adjustments.R
 9a87bca5c5f68fed4cb858ebd299f7b8 *R/predict.pop.R
 b99fdd5ec48b402d7178587dda102253 *R/predict_subnat.R
 1febc3fa3fcbe417ec58611250a3d329 *R/zzz.R
-dfe90a828d8ec524c1b036d29272d172 *build/partial.rdb
+628468daec741b5c6396bb6a7744def2 *build/partial.rdb
 e51ae12bdc34ceb7c72cfdf8c3cd580e *data/MLTbx.R
 67179f07f73304773ad6d79aae2f610a *data/MLTbx.txt
 ea938bf81e6493cbf645974349a917cf *data/migdepratio_2015.rda
@@ -56,6 +56,6 @@ b82d047d70b3940b0d7cc3722a6b6c9f *man/project.pasfr.Rd
 d3f6fef301a2ab65f72fd70b76b7ca95 *man/summary.bayesPop.prediction.Rd
 78790d3c5a1777b3cab6e6d95461e489 *man/vwBaseYear.Rd
 0f1d0df32932a4507bf4c02fceac2ee0 *src/bayesPop_init.c
-97c0050470def772c39a69dc8766b253 *src/projection_functions.c
+a3903095de9881c19996cca730d23b23 *src/projection_functions.c
 3a014e44123e13a4c90e6ab4c39cce90 *tests/run_tests.R
 db88908058591ba1960942afd06fc2f8 *tests/test_functions.R
