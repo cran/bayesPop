@@ -1,5 +1,5 @@
-4a4096e8cc4997e7c8db8392c79725ab *ChangeLog
-0b41e5702da3208d524e32b65c9f4e09 *DESCRIPTION
+088595f389dfdd87b8500481abc5c2a5 *ChangeLog
+649ed19b667f96762c0912c8fdb48295 *DESCRIPTION
 9e386bcb2a4144d73a068bacb404b0a7 *LICENSE
 9fb8b6ad8b29ea714f8f8f70e6429724 *NAMESPACE
 64d5cd536e0b8e82bf4ca89cfba11560 *R/adjustments.R
@@ -7,7 +7,7 @@
 105de2434d1b87bc9913e2c26f004ba6 *R/get_outputs.R
 6e38b73bd1fdedf51263cabbf6e25905 *R/pasfr.R
 4ec1cc4f62de1d41e6574bc7f6233de4 *R/plot_functions.R
-23e28dfee6751eac14194b537de799f4 *R/predict.pop.R
+689aa6fb66ba04305f8e763cd7f115b8 *R/predict.pop.R
 914c789aca7dff1cb86f8d79f4b4017e *R/predict_subnat.R
 1febc3fa3fcbe417ec58611250a3d329 *R/zzz.R
 76161b65639451c966be75488458b3c3 *build/partial.rdb
