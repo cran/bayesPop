@@ -204,7 +204,7 @@ do.pop.predict <- function(country.codes, inp, outdir, nr.traj, ages, pred=NULL,
 			                                  compute.AxBx=FALSE, annual = inp$annual)
 		}
 		debug <- FALSE
-		#stop('')
+
 		if(!fixed.mx) {
 			MxKan <- runKannisto(inpc, inp$start.year, lc.for.all = inp$lc.for.all, npred=npred, annual = inp$annual) 
 			mortcast.args <- .prepare.for.mortality.projection(pattern = inpc$MXpattern, mxKan = MxKan, 
@@ -287,7 +287,7 @@ do.pop.predict <- function(country.codes, inp, outdir, nr.traj, ages, pred=NULL,
 				migf[,2:npredplus1,migtrajf] <- popres$fmig # migpred[['F']]
 			}
 		}
-		#stop("")
+
 		for (variant in 1:nvariants) { # compute the two half child variants
 			if(!fixed.pasfr) 
 				pasfr <- kantorova.pasfr(c(inpc$observed$TFRpred, inpc$TFRhalfchild[variant,]), inpc, 
@@ -349,7 +349,7 @@ do.pop.predict <- function(country.codes, inp, outdir, nr.traj, ages, pred=NULL,
 		                   new.names = c("mean", "sd"))
 		    qMage <- qFage <- qPropMage <- qPropFage <- array(NA, c(nages, nquant, nr_project+1),
 		          dimnames=list(ages, quantiles.to.keep, present.and.proj.years.pop))
-		    for (i in 1:nages) {
+		    for (i in 1:nages) { # TODO: this can be done more efficiently with aaply; no need to iterate over ages
 		        if(nr.traj == 1) {
 		            qMage[i,,] <- matrix(rep(totpm[i,,1],nquant) , nrow=nquant, byrow=TRUE)
 		            qFage[i,,] <- matrix(rep(totpf[i,,1],nquant) , nrow=nquant, byrow=TRUE)
@@ -643,17 +643,21 @@ load.inputs <- function(inputs, start.year, present.year, end.year, wpp.year, fi
 	        if(! "in" %in% colnames(mig.rc.inout) || ! "out" %in% colnames(mig.rc.inout))
 	            stop("Column 'in' or 'out' is missing in the mig.fdm dataset.")
 	    }
-	    fdmMIGtype.names <- list(MigFDMb0 = "beta0", MigFDMb1 = "beta1", MigFDMmin = "min", 
+	    fdmMIGtype.names <- list(MigFDMb0 = "beta0", MigFDMb1 = "beta1", 
+	                             MigFDMb1neg = "beta1neg", MigFDMmin = "min", 
 	                             MigFDMsrin = "in_sex_ratio", MigFDMsrout = "out_sex_ratio")
-	    fdmMIGtype.defaults <- list(beta0 = if(annual) 0.07 else 0.35, beta1 = 0.5, in_sex_ratio = 0.5, out_sex_ratio = 0.5,
-	                                min = if(annual) 0.02 else 0.2)
+	    fdmMIGtype.defaults <- list(beta0 = if(annual) 0.07 else 0.35, beta1 = 0.5, beta1neg = 0.5, 
+	                                in_sex_ratio = 0.5, out_sex_ratio = 0.5, min = if(annual) 0.02 else 0.2)
 	    for(fdmvar in names(fdmMIGtype.names)){
 	        default.value <- fdmMIGtype.defaults[[fdmMIGtype.names[[fdmvar]]]]
-	        default.values <- if(fdmvar == "min") pmin(default.value, MIGtype[["MigFDMb0"]]/10) else rep(default.value, nrow(MIGtype))
+	        default.values <- if(fdmMIGtype.names[[fdmvar]] == "min") pmin(default.value, MIGtype[["MigFDMb0"]]/10) else rep(default.value, nrow(MIGtype))
 	        if(fdmvar %in% colnames(MIGtype)){
 	            if(any((fdm.na <- is.na(MIGtype[[fdmvar]]))))  # NAs can appear if running for a different wpp.year than 2024 (due to merging) and there is a mismatch in countries between the two revisions
 	                MIGtype[[fdmvar]][fdm.na] <- default.values[fdm.na]
-	        } else MIGtype[[fdmvar]] <- default.values
+	        } else {
+	            if(fdmvar == "MigFDMb1neg" && "MigFDMb1" %in% colnames(MIGtype)) MIGtype[[fdmvar]] <- MIGtype[["MigFDMb1"]] # if b1neg is missing, use b1
+	            else MIGtype[[fdmvar]] <- default.values
+	        }
 	        mig.rc.inout <- merge(mig.rc.inout, MIGtype[, c("country_code", fdmvar)], by = "country_code")
 	        setnames(mig.rc.inout, fdmvar, fdmMIGtype.names[[fdmvar]])
 	    }
@@ -951,8 +955,9 @@ migration.totals2age <- function(df, ages = NULL, annual = FALSE, time.periods =
                                  ) {
     mig <- i.mig <- migf <- totmig <- rc <- prop <- i.prop <- popglob <- i.pop <- in_sex_ratio <- out_sex_ratio <- in_sex_factor <- out_sex_factor <- NULL
     age <- sex.ratio <- summig.orig <- migrate <- rate_code <- year <- totpop <- NULL
-    IM <- beta0 <- beta1 <- OM <- `in` <- out <- rxstar_in <- rxstar_out <- i.rxstar_in <- i.rxstar_in_denom <- i.rxstar_out <- NULL
+    IM <- beta0 <- beta1 <- beta1neg <- OM <- `in` <- out <- rxstar_in <- rxstar_out <- i.rxstar_in <- i.rxstar_in_denom <- i.rxstar_out <- NULL
     i.IM <- i.OM <- i.out <- i.v <- i.rxstar_out_denom <- i.totmig <- NULL
+    slope <- iota <- o <- mig2 <- sigma <- mig_dif <- i.mig_dif <- sum_mig_sampl <- sum_mig <- i.sum_sigma <- NULL
     mig_sign <- sx <- i.prop_in <- i.prop_out <- NULL
     debug <- FALSE
     if(is.null(dim(df))) df <- t(df)
@@ -1100,19 +1105,36 @@ migration.totals2age <- function(df, ages = NULL, annual = FALSE, time.periods =
             }
             # To do this for projected trajectories will yield less uncertainty because totpop is deterministic.
             # Correctly it should happen during the projection.
+            # Also needs sampling using the v parameter.
             # Make totmig age-specific
-            migiotmp[, totmig := as.double(totmig)]
-            migiotmp[totmig < 0, totmig := totmig *  out_sex_factor]
-            migiotmp[totmig > 0, totmig := totmig *  in_sex_factor]
-            migiotmp[, IM := pmax(totpop * beta0 + beta1 * totmig, totpop * min, totmig + min * pop)][, OM := IM - totmig] # in- and out-migration totals over sexes
-            #migiotmp[, `:=`(IMs = in_sex_factor * IM, OMs = out_sex_factor * OM)][, totmig := IMs - OMs] # in-, out-migration & totmig for this sex
+            migiotmp[, `:=`(totmig = as.double(totmig), slope = beta1)]
+            migiotmp[totmig < 0, `:=`(totmig = totmig * out_sex_factor, slope = beta1neg)]
+            migiotmp[totmig > 0, `:=`(totmig = totmig *  in_sex_factor)]
+            migiotmp[, IM := pmax(totpop * beta0 + slope * totmig, totpop * min, totmig + min * pop)][, OM := IM - totmig] # in- and out-migration totals over sexes
             migiotmp[, `:=`(rxstar_in = `in`, rxstar_out = out)]
             if(method == "fdmp")
                 migiotmp[, `:=`(rxstar_in = rxstar_in * popglob, rxstar_out = rxstar_out * pop)] # weight by population
             migiotmp[, `:=`(rxstar_in_denom = sum(rxstar_in), rxstar_out_denom = sum(rxstar_out)), by = c(id.col, "year")]
             migtmp[, totmig := as.double(totmig)]
-            migtmp[migiotmp, `:=`(totmig = i.totmig, mig = i.IM * i.rxstar_in / i.rxstar_in_denom  - i.OM * i.rxstar_out / i.rxstar_out_denom), 
-                   on = c(id.col, "age", "year")]
+            migtmp[migiotmp, `:=`(totmig = i.totmig, iota = i.IM * i.rxstar_in / i.rxstar_in_denom,
+                                  o = i.OM * i.rxstar_out / i.rxstar_out_denom), on = c(id.col, "age", "year")][,
+                                  mig := iota - o]
+            # sample if needed
+            if(method != "fdmnop"){
+                has.mult.traj <- id.col == "trajectory" && length(unique(migiotmp[[id.col]])) > 1
+                if(has.mult.traj){
+                    # sample
+                    migtmp[migiotmp, `:=`(sigma = pmin(sqrt((iota + o)/i.v), (pop + 0.0005)/2)), on = c(id.col, "age", "year")][
+                        , mig2 := rnorm(mig, sd = sigma)]
+                    # adjust to sum to total mig
+                    migsampl <- migtmp[, list(sum_sigma = sum(sigma), sum_mig_sampl = sum(mig2), 
+                                           sum_mig = sum(mig)), by = c(id.col, "year")][
+                                               , mig_dif := sum_mig_sampl - sum_mig]
+                    migtmp[migsampl, mig := mig2 - sigma/i.sum_sigma * i.mig_dif, on = c(id.col, "year")][
+                        , `:=`(iota = NULL, o = NULL, mig2 = NULL, sigma = NULL)
+                    ]
+                }
+            }
             migtmp[, prop := mig / totmig][totmig == 0, prop := 0]
         } else { # mig is a rate
             migiotmp[, `:=`(rxstar_in = `in`)]
@@ -1162,7 +1184,7 @@ migration.totals2age <- function(df, ages = NULL, annual = FALSE, time.periods =
             res.io <- iotmp[, c(iocol, "age", "prop.out", "v"), with = FALSE]
             attr(res, "rc.out") <- res.io
             has.mult.traj <- id.col == "trajectory" && length(unique(res.io[[id.col]])) > 1
-            if(method == "fdmnopop") migtmp[, rate_code := 4] else migtmp[, rate_code := if(has.mult.traj) 6 else 5] # using code 5 & 6 for fdmp (6 samples from age-schedules)
+            if(method == "fdmnop") migtmp[, rate_code := 4] else migtmp[, rate_code := if(has.mult.traj) 6 else 5] # using code 5 & 6 for fdmp (6 samples from age-schedules)
         }
         frm <- paste(id.col, "~ year")
         res2 <- dcast(migtmp, frm, value.var = "migrate", fun.aggregate = mean)
@@ -1360,7 +1382,7 @@ migration.totals2age <- function(df, ages = NULL, annual = FALSE, time.periods =
         else colnames(pattern) <- c('country_code', c(columns, char.columns)[c(columns, char.columns) %in% colnames(dataset)])
         return(pattern)
     }
-    fdm.columns <- c('MigFDMb0', 'MigFDMb1', 'MigFDMmin', 'MigFDMsrin', "MigFDMsrout")
+    fdm.columns <- c('MigFDMb0', 'MigFDMb1', 'MigFDMb1neg', 'MigFDMmin', 'MigFDMsrin', "MigFDMsrout")
     MIGtype <- create.pattern(vwBase, c('ProjFirstYear', 'MigCode', fdm.columns))
     if(wpp.year < 2024 && sum(! fdm.columns %in% colnames(MIGtype)) > 3){
         # load the columns from 2024 base year
@@ -1561,7 +1583,7 @@ migration.totals2age <- function(df, ages = NULL, annual = FALSE, time.periods =
 }
 
 .get.migration.traj <- function(pred, par, country, sex, scale = 1, ...) {
-    trajectory <- country_code <- v <- i.value <- age <- NULL # to avoid CRAN NOTEs
+    trajectory <- i.trajectory2 <- country_code <- v <- i.value <- age <- NULL # to avoid CRAN NOTEs
 	cidx <- pred$inputs[[par]][,'country_code'] == country 
 	idx <- cidx & is.element(pred$inputs[[par]][,'year'], pred$inputs$proj.years)
 	if(sum(idx) == 0) return(NULL)
@@ -1576,18 +1598,29 @@ migration.totals2age <- function(df, ages = NULL, annual = FALSE, time.periods =
 	    is.fdm <- startsWith(pred$inputs$mig.age.method, "fdm")
 	    if(is.fdm){
 	        if(!is.null(pred$inputs$migFDMpred)){ # there are trajectories of FDM RC curves
-	            iotraj.traj <- unique(pred$inputs$migFDMpred$trajectory)
-	            iotraj.traj.index <- if(length(iotraj.traj) == nrow(dfw)) 1:nrow(dfw) else sample(
-	                seq_along(iotraj.traj), nrow(dfw), replace = length(iotraj.traj) < nrow(dfw))
 	            iotrajall <- pred$inputs$migFDMpred[country_code == country][, country_code := NULL]
-	            if(length(iotraj.traj) >= nrow(dfw)) {
-	                iotraj <- iotrajall[trajectory %in% iotraj.traj[iotraj.traj.index]]
-	                iotraj[, trajectory := .GRP, by = "trajectory"] # re-number trajectories by their index
-	            } else { # some trajectories will to be repeated, so construct via rbind
+	            iotraj.traj <- unique(iotrajall$trajectory)
+	            if(length(iotraj.traj) > nrow(dfw)) { # we have more FDM trajectories than of total migration; expand total migration dataset to match FDM
+	                dfw.index <- sample(1:nrow(dfw), length(iotraj.traj), replace = TRUE)
+	                dfw <- dfw[dfw.index,]
+	                dfw[, trajectory := iotraj.traj]
+	                utrajs <- sort(unique(dfw$trajectory))
+	                ntrajs <- length(utrajs)
+	            }
+	            if(length(iotraj.traj) == nrow(dfw)){
+	                iotraj.traj.index <- 1:nrow(dfw)
+	                iotraj <- iotrajall
+	                if(!setequal(utrajs, iotraj.traj)){ # trajectories are numbered differently; re-number
+	                    iotraj[data.table(trajectory = iotraj.traj, trajectory2 = utrajs), 
+	                           trajectory := i.trajectory2, on = "trajectory"]
+	                }
+	            } else { # now the only case left is when the FDM dataset is smaller than dfw
+	                iotraj.traj.index <- sample(seq_along(iotraj.traj), nrow(dfw), replace = TRUE) # if FDM smaller, re-sample trajectories
+                    # construct the fdm dataset by binding the rows belonging to the sampled trajectories
 	                iotraj <- NULL
 	                for(i in 1:length(iotraj.traj.index)){
 	                    iotraj <- rbind(iotraj, iotrajall[trajectory %in% iotraj.traj[iotraj.traj.index[i]]][
-	                        , trajectory := i])
+	                        , trajectory := dfw[i, trajectory]])
 	                }
 	            }
 	            iotraj[, age := factor(age, levels = unique(pred$inputs$migFDMpred$age))] # change it to factor in order not to re-order the rows
@@ -1791,7 +1824,11 @@ kantorova.pasfr <- function(tfr, inputs, norms, proj.years, tfr.med, annual = FA
 	if(startTi < nr.est.points+1) { # the years vector does not include all the observed data
 	    yd <- years[1] - by * (nr.est.points - startTi)
 	} else yd <- years[startTi - nr.est.points]
-	p.e <- pasfr.obs[,ncol(pasfr.obs)-nr.est.points+1]/100.
+	if(ncol(pasfr.obs) == 1)
+	    stop("Not enough data on PASFR available to estimate future trends. At least two time periods required.")
+	if(ncol(pasfr.obs) < nr.est.points)
+	    warning("The number of observed PASFR years is less than the recommended 15 years.")
+	p.e <- pasfr.obs[,max(1, ncol(pasfr.obs)-nr.est.points+1)]/100.
 	if(any(is.na(p.e))) stop("Not enough data on PASFR available to estimate future trends.")
 	p.e <- pmax(p.e, min.value)
 	p.e <- p.e/sum(p.e)
@@ -1940,7 +1977,7 @@ get.country.inputs <- function(country, inputs, nr.traj, country.name) {
 	ioinput <- list(rc.fdm = NULL, popdt = NULL, globpop = NULL)
 	is.fdm <- startsWith(inputs$mig.age.method, "fdm")
 	if(is.fdm){
-	    for(it in c("b0", "b1", "min", "srin", "srout")){
+	    for(it in c("b0", "b1", "b1neg", "min", "srin", "srout")){
 	        inpc[[paste0('MIG_FDM', it)]] <- inpc[['MIGtype']][, paste0("MigFDM", it)]
 	    }
 	    ioinput <- .prepare.pop.for.fdm(inputs$mig.age.method, country, inputs$pop.matrix, inputs$present.year, inputs$mig.rc.inout)
@@ -2574,9 +2611,10 @@ StoPopProj <- function(npred, inputs, LT, asfr, mig.pred=NULL, mig.type=NULL, mi
 	finmigF <- as.numeric(migF)
 	observed <- 0
 	if(!all(migratecodeF == migratecodeM)) warning('mismatch in rate codes in ', country.name)
-	MIGfdm <- as.double(c(inputs$MIG_FDMb0, inputs$MIG_FDMb1, inputs$MIG_FDMmin, inputs$MIG_FDMsrin, inputs$MIG_FDMsrout))
-	if(length(MIGfdm) < 5) MIGfdm <- rep(0, 5)
-	#stop("")
+	MIGfdm <- as.double(c(inputs$MIG_FDMb0, inputs$MIG_FDMb1, inputs$MIG_FDMb1neg, 
+	                      inputs$MIG_FDMmin, inputs$MIG_FDMsrin, inputs$MIG_FDMsrout))
+	if(length(MIGfdm) < 6) MIGfdm <- rep(0, 6)
+
 	res <- .C("CCM", as.integer(observed), as.integer(!annual), as.integer(nproj), 
 	            as.numeric(migM), as.numeric(migF), nrow(migM), ncol(migM), as.integer(mig.type),
 	            as.numeric(migrateM), as.numeric(migrateF), as.integer(migratecodeM), 
@@ -2597,6 +2635,8 @@ StoPopProj <- function(npred, inputs, LT, asfr, mig.pred=NULL, mig.type=NULL, mi
 	    res$totp <- colSums(res$popm + res$popf)
 	}
 	
+	if(any(is.na(res$popm)) || any(is.na(res$popf)))
+	    stop("Population projections resulted in NA values. Check inputs.")
  	if(any(res$popm < 0)) warnings('Negative male population for ', country.name)
 	if(any(res$popf < 0)) warnings('Negative female population for ', country.name)
 	
@@ -2665,8 +2705,9 @@ compute.observedVE <- function(inputs, pop.matrix, mig.type, mxKan, country.code
 	LT <- survival.fromLT(nest, LTinputs, annual = annual, observed = TRUE)
 	finmigM <- as.numeric(mig.data[[1]])
 	finmigF <- as.numeric(mig.data[[2]])
-	MIGfdm <- as.double(c(inputs$MIG_FDMb0, inputs$MIG_FDMb1, inputs$MIG_FDMmin, inputs$MIG_FDMsrin, inputs$MIG_FDMsrout))
-	if(length(MIGfdm) < 5) MIGfdm <- rep(0, 5)
+	MIGfdm <- as.double(c(inputs$MIG_FDMb0, inputs$MIG_FDMb1, inputs$MIG_FDMb1neg, 
+	                      inputs$MIG_FDMmin, inputs$MIG_FDMsrin, inputs$MIG_FDMsrout))
+	if(length(MIGfdm) < 6) MIGfdm <- rep(0, 6)
     #stop('')
 	#browser()
 	ccmres <- .C("CCM", as.integer(nobs), as.integer(!annual), as.integer(nest), 
@@ -2720,72 +2761,80 @@ write.pop.projection.summary <- function(pop.pred, what=NULL, expression=NULL, o
 		do.call(paste0('write.', summary.type), c(list(pred, output.dir=output.dir), params, ...))
 }
 
-write.pop <- function(pop.pred, output.dir, ...) 
-	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=FALSE, ...)
+write.pop <- function(pop.pred, output.dir, file.suffix = '', ...) 
+	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=FALSE, 
+	           file.suffix = paste0(file.suffix, 'tpop'), ...)
 	
-write.popsex <- function(pop.pred, output.dir, ...) 
-	.write.pop(pop.pred, output.dir=output.dir, bysex=TRUE, byage=FALSE, what.log='population', ...)
+write.popsex <- function(pop.pred, output.dir, file.suffix = '', ...) 
+	.write.pop(pop.pred, output.dir=output.dir, bysex=TRUE, byage=FALSE, 
+	           file.suffix = paste0(file.suffix, 'tpop'), what.log='population', ...)
 	
-write.popsexage <- function(pop.pred, output.dir, ...) 
-	.write.pop(pop.pred, output.dir=output.dir, bysex=TRUE, byage=TRUE, what.log='population', ...)
+write.popsexage <- function(pop.pred, output.dir, file.suffix = '', ...) 
+	.write.pop(pop.pred, output.dir=output.dir, bysex=TRUE, byage=TRUE, 
+	           file.suffix = paste0(file.suffix, 'pop'),
+	           what.log='population', ...)
 	
-write.popage <- function(pop.pred, output.dir, ...) 
-	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=TRUE, what.log='population', ...)
+write.popage <- function(pop.pred, output.dir, file.suffix = '', ...) 
+	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=TRUE, 
+	           file.suffix = paste0(file.suffix, 'pop'), what.log='population', ...)
 	
-write.births <- function(pop.pred, output.dir, ...) 
+write.births <- function(pop.pred, output.dir, file.suffix = '', ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=FALSE, vital.event='births', 
-			file.suffix='births', what.log='total births', ...)
+	           file.suffix = paste0(file.suffix, 'births'), what.log='total births', ...)
 	
-write.birthssex <- function(pop.pred, output.dir, ...) 
+write.birthssex <- function(pop.pred, output.dir, file.suffix = '', ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=TRUE, byage=FALSE, vital.event='births', 
-			file.suffix='births', what.log='births', ...)
+			file.suffix = paste0(file.suffix, 'births'), what.log='births', ...)
 
-write.birthsage <- function(pop.pred, output.dir, ...) 
+write.birthsage <- function(pop.pred, output.dir, file.suffix = '', ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=TRUE, vital.event='births', 
-			file.suffix='births', what.log='births', ...)
+			file.suffix = paste0(file.suffix, 'births'), what.log='births', ...)
 
-write.birthssexage <- function(pop.pred, output.dir, ...) 
+write.birthssexage <- function(pop.pred, output.dir, file.suffix = '', ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=TRUE, byage=TRUE, vital.event='births', 
-			file.suffix='births', what.log='births', ...)
+			file.suffix = paste0(file.suffix, 'births'), what.log='births', ...)
 
-write.deaths <- function(pop.pred, output.dir, ...) 
+write.deaths <- function(pop.pred, output.dir, file.suffix = '', ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=FALSE, vital.event='deaths', 
-			file.suffix='deaths', what.log='total deaths', ...)
+			file.suffix = paste0(file.suffix, 'deaths'), what.log='total deaths', ...)
 	
-write.deathssex <- function(pop.pred, output.dir, ...) 
+write.deathssex <- function(pop.pred, output.dir, file.suffix = '', ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=TRUE, byage=FALSE, vital.event='deaths', 
-			file.suffix='deaths', what.log='deaths', ...)
+			file.suffix = paste0(file.suffix, 'deaths'), what.log='deaths', ...)
 
-write.deathsage <- function(pop.pred, output.dir, ...) 
+write.deathsage <- function(pop.pred, output.dir, file.suffix = '', ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=TRUE, vital.event='deaths', 
-			file.suffix='deaths', what.log='deaths', ...)
+			file.suffix = paste0(file.suffix, 'deaths'), what.log='deaths', ...)
 	
-write.deathssexage <- function(pop.pred, output.dir, ...) 
+write.deathssexage <- function(pop.pred, output.dir, file.suffix = '', ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=TRUE, byage=TRUE, vital.event='deaths', 
-			file.suffix='deaths', what.log='deaths', ...)
+			file.suffix = paste0(file.suffix, 'deaths'), what.log='deaths', ...)
 			
-write.srsexage <- function(pop.pred, output.dir, ...) 
+write.srsexage <- function(pop.pred, output.dir, file.suffix = '', digits = 4, ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=TRUE, byage=TRUE, vital.event='survival', 
-			file.suffix='sr', what.log='survival ratio', digits=litem('digits', list(...), 4))
+			file.suffix = paste0(file.suffix, 'sr'), what.log='survival ratio', digits = digits, ...)
 			
-write.fertility <- function(pop.pred, output.dir, ...) 
+write.fertility <- function(pop.pred, output.dir, file.suffix = '', digits = 4, ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=FALSE, vital.event='fertility', 
-			file.suffix='asfr', what.log='fertility rate', digits=litem('digits', list(...), 4))
+			file.suffix = paste0(file.suffix, 'tfr'), what.log='fertility rate', digits = digits, ...)
 			
-write.fertilityage <- function(pop.pred, output.dir, ...) 
+write.fertilityage <- function(pop.pred, output.dir, file.suffix = '', digits = 4, ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=TRUE, vital.event='fertility', 
-			file.suffix='asfr', what.log='fertility rate', digits=litem('digits', list(...), 4))
+			file.suffix = paste0(file.suffix, 'asfr'), what.log='fertility rate', digits = digits, ...)
 			
-write.pfertilityage <- function(pop.pred, output.dir, ...) 
+write.pfertilityage <- function(pop.pred, output.dir, file.suffix = '', digits = 4, ...) 
 	.write.pop(pop.pred, output.dir=output.dir, bysex=FALSE, byage=TRUE, vital.event='pasfr', 
-			file.suffix='pasfr', what.log='percent fertility rate', digits=litem('digits', list(...), 4))
+			file.suffix = paste0(file.suffix, 'pasfr'), what.log='percent fertility rate', 
+			digits = digits, ...)
 	
 write.expression <- function(pop.pred, expression, output.dir, file.suffix='expression', 
-							expression.label=expression, include.observed=FALSE, digits=NULL, 
+							expression.label=expression, include.observed=FALSE, 
+							include.means = FALSE, digits=NULL, 
 							adjust=FALSE, adj.to.file=NULL, allow.negative.adj = TRUE, end.time.only=FALSE) {
 	cat('Creating summary file for expression ', expression, ' ...\n')
 	header <- list(country.name='country_name',  country.code='country_code', variant='variant')
 	variant.names <- c('median', 'lower 80', 'upper 80', 'lower 95', 'upper 95')
+	if(include.means) variant.names <- c("mean", variant.names)
 	nr.var <- length(variant.names)
 	pred.period <- get.pop.prediction.periods(pop.pred, end.time.only=end.time.only)
 	nr.proj <- length(pred.period)
@@ -2800,19 +2849,19 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 	col.names <- grep('year', names(header), value=TRUE)
 	result <- NULL
 	if(include.observed) {
-		#res <- get.pop.observed.from.expression.all.countries(expression, pop.pred, time.index=1:nr.obs)
 	    res <- c()
 	    for(iyear in 1:nr.obs)
 		    res <- cbind(res, get.pop.from.expression.all.countries(expression, pop.pred, 
 		                                                            time.index=iyear, observed = TRUE))
 		#copy the same data into the variant rows 
-		result <- matrix(NA, nrow=nrow(res)*5, ncol=ncol(res))
-		for(i in 1:5) result[seq(i,by=5, length=nrow(res)),] <- res
+		result <- matrix(NA, nrow=nrow(res)*nr.var, ncol=ncol(res))
+		for(i in 1:nr.var) result[seq(i,by=nr.var, length=nrow(res)),] <- res
 	}
 	if(adjust && is.null(pop.pred$adjust.env)) pop.pred$adjust.env <- new.env()
 	for(iyear in 1:nr.proj) {	
 		result <- cbind(result, as.vector(t(get.pop.from.expression.all.countries(expression, pop.pred, 
-						quantiles=c(0.5, 0.1, 0.9, 0.025, 0.975), time.index=iyear, adjust=adjust, 
+						quantiles=c(0.5, 0.1, 0.9, 0.025, 0.975), time.index=iyear, 
+						include.means = include.means, adjust=adjust, 
 						adj.to.file=adj.to.file, allow.negative.adj = allow.negative.adj))))
 	}
 	if(!is.null(digits)) result <- round(result, digits)
@@ -2832,9 +2881,10 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 }	
 	
 .write.pop <- function(pop.pred, output.dir, bysex=FALSE, byage=FALSE, vital.event=NULL, file.suffix='tpop', 
-							what.log='total population', include.observed=FALSE, digits=0, adjust=FALSE, 
-							allow.negative.adj = TRUE, end.time.only=FALSE) {
-	cat('Creating summary file of ', what.log, ' ')
+							what.log='total population', include.observed=FALSE, include.means = FALSE, 
+							digits=0, adjust=FALSE, adj.to.file=NULL, allow.negative.adj = TRUE, 
+							end.time.only=FALSE, locations = NULL) {
+	cat('Creating summary file of', what.log, ' ')
 	if(bysex) cat('by sex ')
 	if(byage) cat('by age ')
 	cat ('...\n')
@@ -2842,6 +2892,7 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 	if(bysex) header[['sex']] <- 'sex'
 	if(byage) header[['age']] <- 'age'
 	variant.names <- c('median', 'lower 80', 'upper 80', 'lower 95', 'upper 95')
+	if(include.means) variant.names <- c("mean", variant.names)
 	nr.var <- length(variant.names)
 	if(missing(end.time.only)) end.time.only <- is.null(vital.event)
 	pred.period <- get.pop.prediction.periods(pop.pred, end.time.only=end.time.only)
@@ -2863,28 +2914,31 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 	age.index <- c(TRUE, rep(FALSE, length(pop.pred$ages)))
 	if(byage) age.index <- !age.index
 	ages <- 1:length(pop.pred$ages)
-	if(adjust && is.null(pop.pred$adjust.env)) pop.pred$adjust.env <- new.env()
+	if(adjust) pop.pred$adjust.env <- new.env()
 	age.lables <- get.age.labels(pop.pred$ages, single.year = pop.pred$annual)
     sex <- NULL # to make CRAN check happy
 	all.quantiles <- NULL
 	if(byage && bysex && is.null(vital.event)){
-	    # preload the quantiles (saves tons of time)
-	    all.quantiles[["male"]] <- .get.pop.quantiles(pop.pred, what='Mage', adjust=adjust, allow.negative.adj = allow.negative.adj)
-	    all.quantiles[["female"]] <- .get.pop.quantiles(pop.pred, what='Fage', adjust=adjust, allow.negative.adj = allow.negative.adj)
+	    # pre-load the quantiles (saves tons of time)
+	    all.quantiles[["male"]] <- .get.pop.quantiles(pop.pred, what='Mage', adjust=adjust, adj.to.file=adj.to.file,
+	                                                  allow.negative.adj = allow.negative.adj)
+	    all.quantiles[["female"]] <- .get.pop.quantiles(pop.pred, what='Fage', adjust=adjust, adj.to.file=adj.to.file,
+	                                                    allow.negative.adj = allow.negative.adj)
 	}
 	subtract.from.age <- 0
 	observed.data <- NULL
-	for (country in 1:nrow(pop.pred$countries)) {
-		country.obj <- get.country.object(country, country.table=pop.pred$countries, index=TRUE)
+	countries.to.process <- if(is.null(locations)) pop.pred$countries$code else locations
+	for (country in countries.to.process) {
+		country.obj <- get.country.object(country, country.table=pop.pred$countries)
 		for(sx in c('both', 'male', 'female')[sex.index]) {
 		    quant.all.ages <- NULL
-			if(!is.null(vital.event)) {
+			if(!is.null(vital.event)) { # if vital events (not pop)
 			 	sum.over.ages <- age.index[1]
 			 	if(include.observed) 
 			 		observed <- get.popVE.trajectories.and.quantiles(pop.pred, country.obj$code, event=vital.event, 
 										sex=sx, age='all', sum.over.ages=sum.over.ages, is.observed=TRUE)
 				traj.and.quantiles <- get.popVE.trajectories.and.quantiles(pop.pred, country.obj$code, event=vital.event, 
-										sex=sx, age='all', sum.over.ages=sum.over.ages)
+										sex=sx, age='all', sum.over.ages=sum.over.ages, include.means = include.means)
 				if(is.null(traj.and.quantiles$trajectories)) {
 					warning('Problem with loading ', vital.event, '. Possibly no vital events stored during prediction.')
 					return()
@@ -2897,20 +2951,30 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 				    quant.all.ages[["95"]] <- abind(traj.and.quantiles$quantiles[,"0.025",], 
 				                                    traj.and.quantiles$quantiles[,"0.975",],
 				                                    along = 0)
+				    if(include.means) quant.all.ages[["mean"]] <- traj.and.quantiles$means
 				    # This is because births have only subset of ages
 					ages <- traj.and.quantiles$age.idx.raw
 					age.index <- age.index[1:(length(ages)+1)]
 					subtract.from.age <- traj.and.quantiles$age.idx.raw[1]-traj.and.quantiles$age.idx[1]
 				}
-			} else {
-		        if(sx == "both" && byage){ # if sx is not 'both', then we already have the quantiles pre-computed in all.quantiles
-		            traj <- get.pop.trajectories.multiple.age(pop.pred, country.obj$code, nr.traj=2000, sex = sx, adjust = adjust)$trajectories
+			} else { # pop
+		        if(sx == "both" && byage){ 
+		            # If sx is not 'both' or no disaggregation by age, then we already have the quantiles 
+		            # pre-computed in all.quantiles. Here we need to compute them.
+		            traj <- get.pop.trajectories.multiple.age(pop.pred, country.obj$code, nr.traj=2000, sex = sx, 
+		                                                      adjust = adjust, adj.to.file=adj.to.file, 
+		                                                      adjust.env = pop.pred$adjust.env)$trajectories
 		            quant.all.ages[["50"]] <- get.pop.traj.quantiles.byage(NULL, pop.pred, country.obj$index, country.obj$code, q=0.5, 
 		                                            trajectories=traj, year.index = 1:nr.proj, sex=sx)
 		            quant.all.ages[["80"]] <- get.pop.traj.quantiles.byage(NULL, pop.pred, country.obj$index, country.obj$code, pi = 80, 
 		                                                                    trajectories=traj, year.index = 1:nr.proj, sex=sx)
 		            quant.all.ages[["95"]] <- get.pop.traj.quantiles.byage(NULL, pop.pred, country.obj$index, country.obj$code, pi = 95, 
 		                                                                   trajectories=traj, year.index = 1:nr.proj, sex=sx)
+		            if(include.means)
+		                quant.all.ages[["mean"]] <- get.pop.traj.quantiles.byage(NULL, pop.pred, country.obj$index, country.obj$code, 
+		                                                                       trajectories=traj, year.index = 1:nr.proj, sex=sx,
+		                                                                       compute.mean = TRUE)
+		            
 		        }
 		    }
 			for(age in c('all', ages)[age.index]) {
@@ -2926,16 +2990,17 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 					this.age <- as.integer(this.age)
 					this.result <- this.result[, age := age.lables[this.age]]
 				}
-				if(is.null(vital.event)) {
+				if(is.null(vital.event)) { # pop
 					if(include.observed) 
 						observed.data <- get.pop.observed(pop.pred, country.obj$code, sex=sx, age=this.age)
 					quant <- NULL
 					if(!is.null(all.quantiles))
-					    quant <- all.quantiles[[sx]][,this.age,,]
+					    quant <- all.quantiles[[sx]][,this.age,,] # pre-loaded quantiles
 				    else {
-				        if(is.null(quant.all.ages)) 
+				        if(is.null(quant.all.ages)) { # TODO: this can be very inefficient as it loads trajectories over and over again for each age
 				            quant <- get.pop.trajectories(pop.pred, country.obj$code, nr.traj=0, sex=sx, age=this.age, 
-					                              adjust=adjust, allow.negative.adj = allow.negative.adj)$quantiles
+					                              adjust=adjust, adj.to.file=adj.to.file, allow.negative.adj = allow.negative.adj)$quantiles
+				        }
 				    }
 					traj <- NULL
 					reload <- TRUE
@@ -2957,16 +3022,26 @@ write.expression <- function(pop.pred, expression, output.dir, file.suffix='expr
 					reload <- FALSE
 				}
 				if(is.null(quant.all.ages)){
-				    #browser()
 			        proj.result <- rbind(
+			            if(include.means) get.pop.traj.quantiles(quant, pop.pred, country.obj$index, country.obj$code, 
+			                                   trajectories=traj, reload=reload, sex=sx, age=this.age,
+			                                   adjust=adjust, adj.to.file=adj.to.file, allow.negative.adj = allow.negative.adj,
+			                                   adjust.env = pop.pred$adjust.env, compute.mean = TRUE) else c(), 
 					    get.pop.traj.quantiles(quant, pop.pred, country.obj$index, country.obj$code, q=0.5, 
-											trajectories=traj, reload=reload, sex=sx, age=this.age), 
+											trajectories=traj, reload=reload, sex=sx, age=this.age,
+											adjust=adjust, adj.to.file=adj.to.file, allow.negative.adj = allow.negative.adj,
+											adjust.env = pop.pred$adjust.env), 
 					    get.pop.traj.quantiles(quant, pop.pred, country.obj$index, country.obj$code, pi=80, 
-											trajectories=traj, reload=reload, sex=sx, age=this.age),
+											trajectories=traj, reload=reload, sex=sx, age=this.age,
+											adjust=adjust, adj.to.file=adj.to.file, allow.negative.adj = allow.negative.adj,
+											adjust.env = pop.pred$adjust.env),
 					    get.pop.traj.quantiles(quant, pop.pred, country.obj$index, country.obj$code, pi=95, 
-											trajectories=traj, reload=reload, sex=sx, age=this.age))
+											trajectories=traj, reload=reload, sex=sx, age=this.age,
+											adjust=adjust, adj.to.file=adj.to.file, allow.negative.adj = allow.negative.adj,
+											adjust.env = pop.pred$adjust.env))
 			     } else { 
-			        proj.result <- rbind(quant.all.ages[["50"]][this.age-subtract.from.age,],
+			        proj.result <- rbind(if(include.means) quant.all.ages[["mean"]][this.age-subtract.from.age,] else c(),
+			                            quant.all.ages[["50"]][this.age-subtract.from.age,],
 							            quant.all.ages[["80"]][,this.age-subtract.from.age,],
 							            quant.all.ages[["95"]][,this.age-subtract.from.age,]
 							        )
